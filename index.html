@@ -145,6 +145,7 @@
   <fieldset>
     <legend>Предпросмотр / выгрузка</legend>
     <div class="row" style="gap:8px">
+      <button class="btn primary" id="btnSendToBot">Отправить в бота</button>
       <button class="btn primary" id="btnBuild">Сформировать JSON</button>
       <button class="btn" id="btnCopy">Скопировать</button>
       <button class="btn" id="btnDownload">Скачать relaycfg.json</button>
@@ -322,16 +323,19 @@ setMode('schedule'); renderRanges();
   const tg = window.Telegram?.WebApp;
 
   // Покрас/тема из Telegram (тёмная/светлая автоматически)
-  if (tg) {
-    tg.expand();        // открыть на всю высоту
-    tg.ready();         // сигнализируем Telegram, что UI готов
-  }
+if (tg) {
+  tg.ready(); tg.expand();
+  tg.MainButton.setText('Отправить в бота');
+  tg.MainButton.show();
+  tg.onEvent('mainButtonClicked', sendToBot);
+}
 
   // Собираем JSON из редактора (пример: берём текст из textarea #outJson)
-  function getRelayJsonText() {
-    const ta = document.getElementById('outJson');
-    return ta ? ta.value.trim() : '';
-  }
+function getRelayJsonText() {
+  const ta = document.getElementById('rawOut');  // было outJson
+  return ta ? ta.value.trim() : '';
+}
+
 
   // Валидация: проверим что это JSON и есть ключи relay/schedule
   function validateRelayJsonText(txt) {
@@ -347,6 +351,11 @@ setMode('schedule'); renderRanges();
 
   // 2) «Отправить в бота» через Mini App
   async function sendToBot() {
+     // если пусто — попытаться собрать
+  if (!document.getElementById('rawOut').value.trim()) {
+    document.getElementById('btnBuild')?.click();
+  }
+  const jsonText = getRelayJsonText();
     const jsonText = getRelayJsonText();
     const err = validateRelayJsonText(jsonText);
     if (err) {
