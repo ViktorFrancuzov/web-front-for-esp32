@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Реле по цене — конфиг v0.2</title>
+<title>Реле по цене — конфиг v0.3</title>
 <style>
   :root{
     --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#94a3b8;
@@ -21,137 +21,147 @@
   .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
   .col{flex:1 1 220px;min-width:220px}
   input,select,textarea{width:100%;background:var(--input);color:var(--ink);
-    border:1px solid var(--input-line);border-radius:10px;padding:10px;font-size:14px}
+    border:1px solid var(--input-line);border-radius:10px;padding:10px 12px;font-size:14px}
   textarea{min-height:200px;font-family:ui-monospace,monospace}
   .btn{cursor:pointer;border:1px solid var(--input-line);background:var(--input);
     color:var(--ink);border-radius:10px;padding:10px 14px;font-weight:600}
   .btn.primary{background:var(--accent);color:#062413;border-color:var(--accent)}
   .btn.danger{background:var(--err);color:#fff;border-color:var(--err)}
-  table{width:100%;border-spacing:0 6px}
-  thead th{color:var(--muted);padding:6px 8px}
+  .seg{display:inline-flex;border:1px solid var(--input-line);border-radius:10px;overflow:hidden}
+  .seg button{border:0;background:transparent;padding:8px 12px;color:var(--ink);opacity:.7}
+  .seg button.active{background:var(--accent);color:#062413;opacity:1}
+  table{width:100%;border-collapse:separate;border-spacing:0 6px}
+  thead th{color:var(--muted);font-weight:600;padding:6px 8px}
   tbody td{background:var(--card);border:1px solid var(--line);padding:8px}
   tbody tr td:first-child{border-radius:10px 0 0 10px}
   tbody tr td:last-child{border-radius:0 10px 10px 0}
-  #log{margin-top:10px;white-space:pre-wrap}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Конфиг реле (relaycfg.json) — v0.2</h1>
+  <h1>Конфиг реле (relaycfg.json) — v0.3</h1>
 
   <fieldset>
-    <legend>Редактор / импорт</legend>
+    <legend>Основные</legend>
     <div class="row">
-      <input type="file" id="fileIn" accept=".json">
-      <button class="btn" id="btnPaste">Вставить из буфера</button>
-    </div>
-    <textarea id="rawIn" placeholder="Вставьте сюда relaycfg.json или загрузите файл"></textarea>
-    <div class="row">
-      <button class="btn" id="btnParse">Разобрать → форму</button>
-      <button class="btn danger" id="btnClear">Очистить</button>
+      <div class="seg" id="modeSeg">
+        <button data-mode="manual">manual</button>
+        <button data-mode="threshold">threshold</button>
+        <button data-mode="schedule" class="active">schedule</button>
+      </div>
+      <div class="col" id="thresholdBox">
+        <label>Threshold</label>
+        <input type="number" id="threshold" step="0.01" value="120">
+      </div>
+      <div><label>Manual ON <input type="checkbox" id="manualState"></label></div>
+      <div class="col">
+        <label>Мин. часов по умолчанию</label>
+        <input type="number" id="defaultMinHours" value="6">
+      </div>
     </div>
   </fieldset>
 
   <fieldset>
     <legend>Интервалы</legend>
-    <table id="rangesTable">
-      <thead><tr><th>День</th><th>От</th><th>До</th><th>Мин. часов</th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <div class="row">
+      <select id="wd">
+        <option value="1">Пн</option><option value="2">Вт</option><option value="3">Ср</option>
+        <option value="4">Чт</option><option value="5">Пт</option><option value="6">Сб</option><option value="7">Вс</option>
+      </select>
+      <input type="text" id="fromTime" value="11:00">
+      <input type="text" id="toTime" value="20:00">
+      <input type="number" id="minHours" value="6">
+      <button class="btn" id="btnAddRange">Добавить</button>
+    </div>
+    <table><thead><tr><th>День</th><th>От</th><th>До</th><th>Мин.ч</th><th></th></tr></thead>
+      <tbody id="rangesTable"></tbody></table>
   </fieldset>
 
   <fieldset>
-    <legend>Предпросмотр</legend>
+    <legend>Telegram</legend>
+    <label>price_multiplier <input type="number" id="priceMultiplier" value="1"></label>
+    <label>price_note <input type="text" id="priceNote"></label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Редактор</legend>
+    <input type="file" id="fileIn" accept=".json">
+    <button class="btn" id="btnLoadFile">Загрузить файл</button>
+    <textarea id="rawIn"></textarea>
+    <button class="btn" id="btnParse">Разобрать → форму</button>
+    <button class="btn danger" id="btnClear">Очистить</button>
+  </fieldset>
+
+  <fieldset>
+    <legend>Выгрузка</legend>
     <button class="btn primary" id="btnBuild">Сформировать JSON</button>
     <textarea id="rawOut"></textarea>
   </fieldset>
-
-  <div id="log"></div>
 </div>
 
 <script>
-function log(msg,err=false){
-  const el=document.getElementById('log');
-  el.style.color=err?'var(--err)':'var(--muted)';
-  el.textContent=(err?'⚠ ':'ℹ ')+msg;
-}
-
-const state={ranges:[]};
-const tbody=document.querySelector('#rangesTable tbody');
-
-// загрузка файла
-document.getElementById('fileIn').addEventListener('change',async e=>{
-  const f=e.target.files[0]; if(!f) return;
-  try{
-    const txt=await f.text();
-    document.getElementById('rawIn').value=txt;
-    log('Файл загружен, нажмите «Разобрать»');
-  }catch(e){log('Ошибка чтения файла: '+e,true);}
-});
-
-// вставка из буфера
-document.getElementById('btnPaste').onclick=async()=>{
-  try{
-    const txt=await navigator.clipboard.readText();
-    document.getElementById('rawIn').value=txt;
-    log('Вставлено из буфера');
-  }catch(e){log('Не удалось прочитать из буфера',true);}
-};
-
-// парсинг
-document.getElementById('btnParse').onclick=()=>{
-  const s=document.getElementById('rawIn').value.trim();
-  if(!s){log('Пустое поле',true);return;}
-  try{
-    const j=JSON.parse(s);
-    if(!j.relay){log('Нет ключа relay',true);return;}
-    state.ranges=[];
-    if(Array.isArray(j.relay.schedule)){
-      for(const g of j.relay.schedule){
-        if(!Array.isArray(g.entries)) continue;
-        for(const e of g.entries){
-          if(!Array.isArray(e.ranges)) continue;
-          for(const r of e.ranges){
-            const wd=r.from?.wd||g.wd||0;
-            const from=r.from?.time||'',to=r.to?.time||'';
-            const mh=r.min_hours||e.min_hours||0;
-            if(wd&&from&&to) state.ranges.push({wd,from,to,min_hours:mh});
-          }
-        }
-      }
-    }
-    renderRanges();
-    log('JSON разобран ✔');
-  }catch(e){log('Ошибка JSON: '+e.message,true);}
-};
-
+function log(msg,err){console.log(msg);alert(msg);}
+const state={mode:'schedule',threshold:120,manual_state:false,default_min_hours:6,ranges:[],price_multiplier:1,price_note:'',telegramExtra:{}};
+function $(id){return document.getElementById(id);}
 function renderRanges(){
-  tbody.innerHTML='';
+  const tb=$('rangesTable');tb.innerHTML='';
   const days=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-  state.ranges.forEach(r=>{
+  state.ranges.forEach((r,i)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${days[r.wd-1]||r.wd}</td><td>${r.from}</td><td>${r.to}</td><td>${r.min_hours}</td>`;
-    tbody.appendChild(tr);
+    tr.innerHTML=`<td>${days[r.wd-1]}</td><td>${r.from}</td><td>${r.to}</td><td>${r.min_hours}</td>
+    <td><button data-i="${i}">X</button></td>`;
+    tb.appendChild(tr);
   });
+  tb.querySelectorAll('button').forEach(b=>b.onclick=()=>{state.ranges.splice(b.dataset.i,1);renderRanges();});
 }
+function setMode(m){state.mode=m;document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));$('thresholdBox').style.display=(m==='threshold')?'':'none';}
+$('modeSeg').onclick=e=>{const b=e.target.closest('button');if(b)setMode(b.dataset.mode);}
+$('threshold').oninput=()=>state.threshold=+$('threshold').value;
+$('manualState').onchange=()=>state.manual_state=$('manualState').checked;
+$('defaultMinHours').oninput=()=>state.default_min_hours=parseInt($('defaultMinHours').value||'0',10);
+$('btnAddRange').onclick=()=>{state.ranges.push({wd:+$('wd').value,from:$('fromTime').value,to:$('toTime').value,min_hours:+$('minHours').value});renderRanges();};
+$('priceMultiplier').oninput=()=>state.price_multiplier=+$('priceMultiplier').value;
+$('priceNote').oninput=()=>state.price_note=$('priceNote').value;
+$('btnClear').onclick=()=>$('rawIn').value='';
 
-// сборка
-document.getElementById('btnBuild').onclick=()=>{
-  try{
-    const relay={mode:"schedule",schedule:[{wd:1,entries:[{mode:"schedule",ranges:state.ranges}]}]};
-    const doc={relay};
-    document.getElementById('rawOut').value=JSON.stringify(doc,null,2);
-    log('JSON собран');
-  }catch(e){log('Ошибка сборки: '+e.message,true);}
+$('btnLoadFile').onclick=async()=>{const f=$('fileIn').files?.[0];if(!f)return;$('rawIn').value=await f.text();};
+
+$('btnParse').onclick=()=>{
+  try{const j=JSON.parse($('rawIn').value);
+    setMode(j.relay?.mode||'schedule');
+    state.threshold=j.relay?.threshold||0; $('threshold').value=state.threshold;
+    state.manual_state=!!j.relay?.manual_state; $('manualState').checked=state.manual_state;
+    state.ranges=[];
+    (j.relay?.schedule||[]).forEach(g=>(g.entries||[]).forEach(e=>(e.ranges||[]).forEach(r=>{state.ranges.push({wd:r.from?.wd,from:r.from?.time,to:r.to?.time,min_hours:r.min_hours});})));
+    state.price_multiplier=j.telegram?.price_multiplier||1;$('priceMultiplier').value=state.price_multiplier;
+    state.price_note=j.telegram?.price_note||'';$('priceNote').value=state.price_note;
+    state.telegramExtra={...j.telegram};delete state.telegramExtra.price_multiplier;delete state.telegramExtra.price_note;
+    renderRanges();log('JSON разобран');
+  }catch(e){log('Ошибка JSON: '+e,true);}
 };
 
-// очистка
-document.getElementById('btnClear').onclick=()=>{
-  document.getElementById('rawIn').value='';
-  tbody.innerHTML='';
-  state.ranges=[];
-  log('Очищено');
+function hmToMinutes(t){const m=/^(\\d{1,2}):(\\d{2})$/.exec(t);return m?(+m[1])*60+(+m[2]):null;}
+function nextWd(wd){return wd>=7?1:(wd+1);}
+
+$('btnBuild').onclick=()=>{
+  const grouped={};
+  for(const r of state.ranges)(grouped[r.wd]??=[]).push(r);
+  const schedule=Object.keys(grouped).map(k=>{
+    const wd=+k,arr=grouped[k];
+    const ranges=arr.map(x=>{
+      const fm=hmToMinutes(x.from),tm=hmToMinutes(x.to);
+      const toWd=(tm!=null&&fm!=null&&tm<=fm)?nextWd(x.wd):x.wd;
+      return{from:{wd:x.wd,time:x.from},to:{wd:toWd,time:x.to},min_hours:x.min_hours};
+    });
+    return{wd,entries:[{mode:"schedule",ranges}]};
+  });
+  const relay={mode:state.mode,threshold:state.threshold,manual_state:state.manual_state,schedule};
+  const telegram={price_multiplier:state.price_multiplier,price_note:state.price_note,...state.telegramExtra};
+  $('rawOut').value=JSON.stringify({relay,telegram},null,2);
+  log('JSON сформирован');
 };
+
+setMode('schedule');renderRanges();
 </script>
 </body>
 </html>
