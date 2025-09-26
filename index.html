@@ -51,6 +51,7 @@
   tbody tr td:first-child{border-radius:10px 0 0 10px}
   tbody tr td:last-child{border-radius:0 10px 10px 0}
   .muted{color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -145,15 +146,19 @@
   <fieldset>
     <legend>Предпросмотр / выгрузка</legend>
     <div class="row" style="gap:8px">
-      <button class="btn primary" id="btnSendToBot">Отправить в бота</button>
-      <button class="btn primary" id="btnBuild">Сформировать JSON</button>
+      <button class="btn" id="btnBuild">Сформировать JSON</button>
       <button class="btn" id="btnCopy">Скопировать</button>
       <button class="btn" id="btnDownload">Скачать relaycfg.json</button>
+      <button class="btn primary" id="btnSendToBot">Отправить в бота</button>
+      <span class="hint" id="saveHint" style="margin-left:auto"> </span>
     </div>
-    <textarea id="rawOut" placeholder="Готовый relaycfg.json (отправь боту текстом или файлом)"></textarea>
-    <div class="muted">Контроллер проверит наличие ключей <code>relay</code> и <code>schedule</code> и применит автоматически.</div>
+    <textarea id="rawOut" placeholder="Готовый relaycfg.json (отправь боту текстом/файлом или через кнопку «Отправить в бота» в Mini App)"></textarea>
+    <div class="muted">Контроллер проверит наличие ключа <code>relay</code> и применит автоматически.</div>
   </fieldset>
 </div>
+
+<!-- Telegram WebApp JS (один раз) -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 
 <script>
 (function(){
@@ -163,6 +168,7 @@
   }
 })();
 
+// ===== состояние =====
 const state = {
   mode: 'schedule',
   threshold: 120,
@@ -174,6 +180,8 @@ const state = {
 };
 
 const $$ = sel => document.querySelector(sel);
+function $(id){ return document.getElementById(id); }
+
 const els = {
   botUser: $('#botUser'),
   openBot: $('#btnOpenBot'), copyStatus: $('#btnCopyStatus'), copyCfgGet: $('#btnCopyCfgGet'),
@@ -184,10 +192,11 @@ const els = {
   pm: $('#priceMultiplier'), pn: $('#priceNote'),
   fileIn: $('#fileIn'), loadFile: $('#btnLoadFile'), paste: $('#btnPaste'),
   rawIn: $('#rawIn'), parse: $('#btnParse'), clear: $('#btnClear'),
-  build: $('#btnBuild'), copy: $('#btnCopy'), download: $('#btnDownload'), rawOut: $('#rawOut')
+  build: $('#btnBuild'), copy: $('#btnCopy'), download: $('#btnDownload'), rawOut: $('#rawOut'),
+  sendToBot: $('#btnSendToBot'), saveHint: $('#saveHint')
 };
-function $(id){ return document.getElementById(id); }
 
+// ===== режимы =====
 function setMode(m){
   state.mode = m;
   els.modeSeg.querySelectorAll('button').forEach(b=>{
@@ -199,11 +208,11 @@ els.modeSeg.addEventListener('click', (e)=>{
   const b = e.target.closest('button'); if(!b) return;
   setMode(b.dataset.mode);
 });
-
 els.threshold.oninput = ()=> state.threshold = +els.threshold.value;
 els.manualState.onchange = ()=> state.manual_state = !!els.manualState.checked;
 els.defMin.oninput = ()=> state.default_min_hours = Math.max(0, parseInt(els.defMin.value||'0',10));
 
+// ===== интервалы =====
 function renderRanges(){
   els.tableBody.innerHTML='';
   const names=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
@@ -215,10 +224,9 @@ function renderRanges(){
     els.tableBody.appendChild(tr);
   });
   els.tableBody.querySelectorAll('button[data-i]').forEach(b=>{
-    b.onclick=()=>{ state.ranges.splice(+b.dataset.i,1); renderRanges(); };
+    b.onclick=()=>{ state.ranges.splice(+b.dataset.i,1); renderRanges(); saveDraftSoon(); };
   });
 }
-
 els.add.onclick = ()=>{
   const r={
     wd:+els.wd.value,
@@ -229,12 +237,14 @@ els.add.onclick = ()=>{
   if(!/^\d{1,2}:\d{2}$/.test(r.from)||!/^\d{1,2}:\d{2}$/.test(r.to)||r.min_hours<=0){
     alert('Проверьте время и минимум часов'); return;
   }
-  state.ranges.push(r); renderRanges();
+  state.ranges.push(r); renderRanges(); saveDraftSoon();
 };
 
-els.pm.oninput = ()=> state.price_multiplier = +els.pm.value;
-els.pn.oninput = ()=> state.price_note = els.pn.value;
+// ===== telegram-поля =====
+els.pm.oninput = ()=> { state.price_multiplier = +els.pm.value; saveDraftSoon(); };
+els.pn.oninput = ()=> { state.price_note = els.pn.value; saveDraftSoon(); };
 
+// ===== сборка JSON =====
 function buildJson(){
   const grouped={};
   for(const r of state.ranges){ (grouped[r.wd]??=[]).push(r); }
@@ -255,8 +265,7 @@ function buildJson(){
   if ((state.price_note||'').length) doc.telegram.price_note = state.price_note;
   return doc;
 }
-
-els.build.onclick = ()=> { els.rawOut.value = JSON.stringify(buildJson(), null, 2); };
+els.build.onclick = ()=> { els.rawOut.value = JSON.stringify(buildJson(), null, 2); saveDraftSoon(true); };
 els.copy.onclick = async ()=>{ if(!els.rawOut.value) els.build.onclick(); if(!els.rawOut.value) return; await navigator.clipboard.writeText(els.rawOut.value); alert('Скопировано — отправьте боту'); };
 els.download.onclick = ()=>{
   if(!els.rawOut.value) els.build.onclick(); if(!els.rawOut.value) return;
@@ -264,9 +273,9 @@ els.download.onclick = ()=>{
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='relaycfg.json'; a.click(); URL.revokeObjectURL(a.href);
 };
 
-els.clear.onclick = ()=> els.rawIn.value='';
-els.paste.onclick = async ()=>{ try{ els.rawIn.value = await navigator.clipboard.readText(); }catch(e){ alert('Не удалось прочитать из буфера'); } };
-
+// ===== импорт =====
+els.clear.onclick = ()=> { els.rawIn.value=''; saveDraftSoon(); };
+els.paste.onclick = async ()=>{ try{ els.rawIn.value = await navigator.clipboard.readText(); saveDraftSoon(); }catch(e){ alert('Не удалось прочитать из буфера'); } };
 els.loadFile.onclick = async ()=>{
   const f=els.fileIn.files?.[0]; if(!f) return; els.rawIn.value = await f.text(); els.parse.onclick();
 };
@@ -274,7 +283,6 @@ els.parse.onclick = ()=>{
   const s=els.rawIn.value.trim(); if(!s) return;
   try{
     const j=JSON.parse(s);
-    // relay
     if(j.relay){
       setMode(j.relay.mode||'schedule');
       els.threshold.value = state.threshold = +j.relay.threshold||0;
@@ -296,14 +304,14 @@ els.parse.onclick = ()=>{
       }
       renderRanges();
     }
-    // telegram
     if(j.telegram){ els.pm.value = state.price_multiplier = +j.telegram.price_multiplier||1;
                     els.pn.value = state.price_note = j.telegram.price_note||''; }
     alert('JSON разобран в форму');
+    saveDraftSoon(true);
   }catch(e){ alert('Ошибка JSON: '+e); }
 };
 
-// Telegram helpers
+// ===== Telegram helpers =====
 els.openBot.onclick = ()=>{
   const u=(els.botUser.value||'').trim(); if(!u) return alert('Укажи имя бота');
   window.open('https://t.me/'+u,'_blank');
@@ -311,91 +319,88 @@ els.openBot.onclick = ()=>{
 els.copyStatus.onclick = async ()=>{ await navigator.clipboard.writeText('/status'); alert('Скопировано: /status'); };
 els.copyCfgGet.onclick = async ()=>{ await navigator.clipboard.writeText('/cfgget'); alert('Скопировано: /cfgget'); };
 
-// init
-setMode('schedule'); renderRanges();
-</script>
-
-  <!-- 1) Обязательно подключи Telegram WebApp JS -->
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-
-<script>
-  // Удобные ссылки на объекты
-  const tg = window.Telegram?.WebApp;
-
-  // Покрас/тема из Telegram (тёмная/светлая автоматически)
+// ===== Mini App: отправка в бота =====
+const tg = window.Telegram?.WebApp;
+function getRelayJsonText() {
+  const ta = document.getElementById('rawOut');
+  return ta ? ta.value.trim() : '';
+}
+function validateRelayJsonText(txt) {
+  try { const obj = JSON.parse(txt); if (!obj.relay) return 'Нет ключа "relay"'; return null; }
+  catch (e) { return 'Некорректный JSON: ' + e.message; }
+}
+async function sendToBot() {
+  if (!els.rawOut.value.trim()) els.build.click();           // автосборка
+  const jsonText = getRelayJsonText();
+  const err = validateRelayJsonText(jsonText);
+  if (err) { tg ? tg.showPopup({title:'Ошибка',message:err,buttons:[{type:'close'}]}) : alert(err); return; }
+  if (!tg) { alert('Эта страница вне Telegram. Отправьте JSON боту текстом/файлом.'); return; }
+  try {
+    tg.sendData(jsonText);                                   // web_app_data.data
+    tg.HapticFeedback?.impactOccurred('light');
+    tg.showPopup({ title:'Отправлено', message:'Конфиг передан боту.\nESP применит его автоматически.', buttons:[{type:'ok'}] });
+  } catch (e) {
+    tg.showPopup({ title:'Ошибка', message:'Не удалось отправить: '+e, buttons:[{type:'close'}] });
+  }
+}
+els.sendToBot.addEventListener('click', sendToBot);
 if (tg) {
-  tg.ready(); tg.expand();
   tg.MainButton.setText('Отправить в бота');
   tg.MainButton.show();
   tg.onEvent('mainButtonClicked', sendToBot);
 }
 
-  // Собираем JSON из редактора (пример: берём текст из textarea #outJson)
-function getRelayJsonText() {
-  const ta = document.getElementById('rawOut');  // было outJson
-  return ta ? ta.value.trim() : '';
+// ===== Черновик (localStorage) =====
+const LS_STATE='relaycfg.state.v1';
+function snapshotState() {
+  return {
+    mode: state.mode,
+    threshold: +els.threshold.value || 0,
+    manual_state: !!els.manualState.checked,
+    default_min_hours: +els.defMin.value || 0,
+    ranges: state.ranges,
+    price_multiplier: +els.pm.value || 1,
+    price_note: els.pn.value || '',
+    rawOut: els.rawOut.value || ''
+  };
+}
+function applyState(s) {
+  if (!s) return;
+  setMode(s.mode || 'schedule');
+  els.threshold.value = s.threshold ?? 0; els.threshold.oninput();
+  els.manualState.checked = !!s.manual_state; els.manualState.onchange();
+  els.defMin.value = s.default_min_hours ?? 6; els.defMin.oninput();
+  state.ranges = Array.isArray(s.ranges) ? s.ranges : [];
+  renderRanges();
+  els.pm.value = s.price_multiplier ?? 1; els.pm.oninput();
+  els.pn.value = s.price_note ?? ''; els.pn.oninput();
+  if (s.rawOut) els.rawOut.value = s.rawOut;
+}
+function saveDraft() {
+  try { localStorage.setItem(LS_STATE, JSON.stringify(snapshotState())); savedHint(); } catch(_) {}
+}
+function loadDraft() {
+  try { const raw = localStorage.getItem(LS_STATE); if (!raw) return false; applyState(JSON.parse(raw)); savedHint('черновик загружен'); return true; } catch(_) { return false; }
+}
+function clearDraft() { localStorage.removeItem(LS_STATE); savedHint('черновик очищен'); }
+let saveTimer=null;
+function saveDraftSoon(immediate){
+  if (immediate){ saveDraft(); return; }
+  clearTimeout(saveTimer);
+  saveTimer=setTimeout(saveDraft, 600);
+}
+function savedHint(txt){
+  if(!els.saveHint) return;
+  els.saveHint.textContent = txt || 'черновик сохранён';
+  setTimeout(()=>{ if(els.saveHint.textContent.startsWith('черновик')) els.saveHint.textContent=' '; }, 2000);
 }
 
+// авто-загрузка при входе
+window.addEventListener('DOMContentLoaded', () => { loadDraft(); });
+// автосейв при закрытии
+window.addEventListener('beforeunload', saveDraft);
 
-  // Валидация: проверим что это JSON и есть ключи relay/schedule
-  function validateRelayJsonText(txt) {
-    try {
-      const obj = JSON.parse(txt);
-      if (!obj.relay)  return 'Нет ключа "relay"';
-      // schedule может отсутствовать в режимах manual/threshold — поэтому не требуем жёстко
-      return null;
-    } catch (e) {
-      return 'Некорректный JSON: ' + e.message;
-    }
-  }
-
-  // 2) «Отправить в бота» через Mini App
-  async function sendToBot() {
-     // если пусто — попытаться собрать
-  if (!document.getElementById('rawOut').value.trim()) {
-    document.getElementById('btnBuild')?.click();
-  }
-  const jsonText = getRelayJsonText();
-    const jsonText = getRelayJsonText();
-    const err = validateRelayJsonText(jsonText);
-    if (err) {
-      if (tg) tg.showPopup({ title: 'Ошибка', message: err, buttons: [{type:'close'}] });
-      else alert(err);
-      return;
-    }
-
-    if (!tg) {
-      // не внутри Telegram — просто подсказываем, что надо скопировать вручную
-      alert('Эта страница не внутри Telegram. Скопируйте JSON и отправьте боту как текст/файл.');
-      return;
-    }
-
-    try {
-      // Лучше отправлять точно строкой JSON
-      // Можно добавить префикс, чтобы на прошивке легче отличать: например, "relaycfg:"
-      tg.sendData(jsonText);      // улетит в message.web_app_data.data
-      tg.HapticFeedback?.impactOccurred('light');
-      tg.showPopup({ title: 'Отправлено', message: 'Конфиг передан боту.\nESP применит его автоматически.', buttons: [{type:'ok'}] });
-      // tg.close(); // если хочется закрывать Mini App после отправки
-    } catch (e) {
-      tg.showPopup({ title: 'Ошибка', message: 'Не удалось отправить: ' + e, buttons: [{type:'close'}] });
-    }
-  }
-
-  // Повесь на твою кнопку:
-  // <button id="btnSendToBot" ...>Отправить в бота</button>
-  window.addEventListener('DOMContentLoaded', () => {
-    const btn = document.getElementById('btnSendToBot');
-    if (btn) btn.addEventListener('click', sendToBot);
-  });
-
-  // (Необязательно) Главная кнопка Telegram снизу
-  if (tg) {
-    tg.MainButton.setText('Отправить в бота');
-    tg.MainButton.show();
-    tg.onEvent('mainButtonClicked', sendToBot);
-  }
+setMode('schedule'); renderRanges();
 </script>
-
 </body>
 </html>
