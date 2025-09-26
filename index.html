@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Smart Relay Panel</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 16px; background:#111; color:#eee; }
+    h3 { margin-top:0; }
+    button { display:block; width:100%; padding:12px; margin:6px 0;
+             border:0; border-radius:8px; font-size:16px; }
+    .ok { background:#2ea043; color:#fff; }
+    .sec{ background:#444; color:#fff; }
+    textarea { width:100%; height:200px; margin:6px 0; background:#222;
+               color:#eee; border-radius:6px; padding:8px; }
+  </style>
+</head>
+<body>
+  <h3>Smart Relay – Панель</h3>
+
+  <button class="sec" id="btnStatus">Запросить статус</button>
+  <button class="sec" id="btnCfgGet">Получить конфиг</button>
+
+  <textarea id="cfg" placeholder='{"relay":{"threshold":120}}'></textarea>
+
+  <button class="ok" id="btnApply">Применить (без записи)</button>
+  <button class="sec" id="btnSave">Сохранить на устройство</button>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    tg.expand();
+
+    function send(cmd, payload) {
+      const data = { cmd, payload: payload ?? null };
+      tg.sendData(JSON.stringify(data));
+      tg.MainButton.setText("Команда отправлена…").show();
+      setTimeout(()=>tg.MainButton.hide(), 1500);
+    }
+
+    document.getElementById('btnStatus').onclick = () => send("STATUS?");
+    document.getElementById('btnCfgGet').onclick = () => send("CFG?");
+    document.getElementById('btnApply').onclick  = () => {
+      send("CFG_SET", document.getElementById('cfg').value);
+    };
+    document.getElementById('btnSave').onclick   = () => {
+      send("CFG_SAVE", document.getElementById('cfg').value);
+    };
+  </script>
+</body>
+</html>
