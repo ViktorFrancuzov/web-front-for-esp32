@@ -1,51 +1,472 @@
 <!doctype html>
-<html>
+<html lang="ru">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Smart Relay Panel</title>
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <title>Relay Config Editor</title>
   <style>
-    body { font-family: sans-serif; margin: 16px; background:#111; color:#eee; }
-    h3 { margin-top:0; }
-    button { display:block; width:100%; padding:12px; margin:6px 0;
-             border:0; border-radius:8px; font-size:16px; }
-    .ok { background:#2ea043; color:#fff; }
-    .sec{ background:#444; color:#fff; }
-    textarea { width:100%; height:200px; margin:6px 0; background:#222;
-               color:#eee; border-radius:6px; padding:8px; }
+    :root { --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#94a3b8; --accent:#22c55e; --warn:#f59e0b; --err:#ef4444; }
+    html,body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; background:var(--bg); color:var(--ink); }
+    .wrap { max-width:1000px; margin:24px auto; padding:0 16px; }
+    h1 { font-size:22px; margin:8px 0 16px; }
+    .grid { display:grid; grid-template-columns:1fr; gap:16px; }
+    @media (min-width:900px){ .grid{ grid-template-columns: 1fr 1fr; } }
+    .card { background:var(--card); border:1px solid #1f2937; border-radius:14px; padding:16px; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    label { font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
+    input[type="number"], input[type="text"], select, textarea {
+      width:100%; box-sizing:border-box; background:#0b1220; color:var(--ink);
+      border:1px solid #263244; border-radius:10px; padding:10px 12px; font-size:14px;
+    }
+    textarea { min-height:220px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .btn { cursor:pointer; border:0; border-radius:10px; padding:10px 14px; font-weight:600; }
+    .btn-ghost { background:#0b1220; color:var(--ink); border:1px solid #223046; }
+    .btn-ok { background:var(--accent); color:#062413; }
+    .btn-warn { background:var(--warn); color:#1a1005; }
+    .btn-err { background:var(--err); color:#2b0b0b; }
+    .tag { font-size:12px; padding:3px 8px; border-radius:999px; background:#0b1220; border:1px solid #223046; color:var(--muted); }
+    .hr { height:1px; background:#1f2937; margin:12px 0; }
+    .range-item { border:1px dashed #2b3a54; border-radius:12px; padding:10px; margin-bottom:10px; }
+    .hint { color:var(--muted); font-size:12px; }
+    .ok { color:var(--accent); }
+    .warn { color:var(--warn); }
+    .err { color:var(--err); }
   </style>
-</head>
-<body>
-  <h3>Smart Relay – Панель</h3>
-
-  <button class="sec" id="btnStatus">Запросить статус</button>
-  <button class="sec" id="btnCfgGet">Получить конфиг</button>
-
-  <textarea id="cfg" placeholder='{"relay":{"threshold":120}}'></textarea>
-
-  <button class="ok" id="btnApply">Применить (без записи)</button>
-  <button class="sec" id="btnSave">Сохранить на устройство</button>
-
   <script>
-    const tg = window.Telegram.WebApp;
-    tg.expand();
+    // ----- helpers -----
+    const WDNAMES = ["","Пн","Вт","Ср","Чт","Пт","Сб","Вс"]; // 1..7
 
-    function send(cmd, payload) {
-      const data = { cmd, payload: payload ?? null };
-      tg.sendData(JSON.stringify(data));
-      tg.MainButton.setText("Команда отправлена…").show();
-      setTimeout(()=>tg.MainButton.hide(), 1500);
+    function $ (sel, root=document) { return root.querySelector(sel); }
+    function $$ (sel, root=document) { return Array.from(root.querySelectorAll(sel)); }
+
+    function emptyRelayConfig(){
+      return {
+        relay: {
+          mode: "threshold",           // или "schedule"
+          threshold: 120,
+          schedule: [
+            {
+              wd: 1,                   // Понедельник
+              comment: "понедельник (1=Пн … 7=Вс)",
+              entries: [
+                {
+                  mode: "schedule",
+                  min_hours: 6,
+                  ranges: [
+                    {
+                      from: { wd: 1, time: "11:00" },
+                      to:   { wd: 2, time: "07:00" },
+                      comment: "Пн 11:00 → Вт 07:00: набрать минимум 6 часов"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        telegram: {
+          price_multiplier: 1,
+          price_note: "НДС+сети",
+          daily_price_push: true,
+          daily_price_hour: 2,
+          daily_price_minute: 0
+        }
+      };
     }
 
-    document.getElementById('btnStatus').onclick = () => send("STATUS?");
-    document.getElementById('btnCfgGet').onclick = () => send("CFG?");
-    document.getElementById('btnApply').onclick  = () => {
-      send("CFG_SET", document.getElementById('cfg').value);
-    };
-    document.getElementById('btnSave').onclick   = () => {
-      send("CFG_SAVE", document.getElementById('cfg').value);
-    };
+    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+    function isValidTime(s){ return /^\d{2}:\d{2}$/.test(s); }
+    function parseIntSafe(v, def){ const n = parseInt(v,10); return Number.isFinite(n)?n:def; }
+
+    // store current state
+    let state = emptyRelayConfig();
+    let inTelegram = false;
+
+    function init(){
+      // Detect Telegram WebApp
+      inTelegram = typeof window.Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initDataUnsafe;
+      if(inTelegram){
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+        $(".tg-badge").textContent = "Telegram WebApp";
+        $(".btn-send").style.display = "inline-block";
+      } else {
+        $(".tg-badge").textContent = "Standalone";
+        $(".btn-send").style.display = "none";
+      }
+
+      // bind inputs
+      // mode & threshold
+      $("#relay-mode").addEventListener("change", e => { state.relay.mode = e.target.value; render(); syncJson();});
+      $("#threshold").addEventListener("input", e => { state.relay.threshold = parseIntSafe(e.target.value, state.relay.threshold); syncJson();});
+
+      // schedule editor events (delegated)
+      $("#ranges").addEventListener("input", onRangesInput);
+      $("#ranges").addEventListener("click", onRangesClick);
+
+      // buttons
+      $(".btn-load").addEventListener("click", ()=> $("#file").click());
+      $("#file").addEventListener("change", onLoadFile);
+      $(".btn-save").addEventListener("click", onSaveFile);
+      $(".btn-applyjson").addEventListener("click", applyFromJson);
+      $(".btn-format").addEventListener("click", prettyJson);
+      $(".btn-send").addEventListener("click", sendToBot);
+
+      // seed UI
+      render();
+      syncJson();
+    }
+
+    // ---------- JSON area ----------
+    function syncJson(){
+      $("#json").value = JSON.stringify(state, null, 2);
+      validate();
+    }
+
+    function applyFromJson(){
+      try{
+        const obj = JSON.parse($("#json").value);
+        // минимальная валидация
+        if (!obj.relay || typeof obj.relay !== "object") throw new Error("Нет объекта relay");
+        if (!("mode" in obj.relay)) throw new Error("relay.mode обязателен");
+        if (obj.relay.mode !== "threshold" && obj.relay.mode !== "schedule") throw new Error("relay.mode должен быть 'threshold' или 'schedule'");
+        if (typeof obj.relay.threshold !== "number") throw new Error("relay.threshold должен быть числом");
+        // ok
+        state = obj;
+        render();
+        validate(true);
+        toast("JSON применён к форме");
+      }catch(e){
+        toast("Ошибка JSON: " + e.message, "err");
+      }
+    }
+
+    function prettyJson(){
+      try{
+        const obj = JSON.parse($("#json").value);
+        $("#json").value = JSON.stringify(obj, null, 2);
+        validate(true);
+      }catch(e){
+        toast("Ошибка форматирования: " + e.message, "err");
+      }
+    }
+
+    function validate(showToast){
+      // базовые проверки
+      let problems = [];
+
+      if (state.relay.mode !== "threshold" && state.relay.mode !== "schedule") problems.push("relay.mode");
+      if (typeof state.relay.threshold !== "number") problems.push("relay.threshold");
+
+      // check schedule
+      if (Array.isArray(state.relay.schedule)){
+        for (const g of state.relay.schedule){
+          if (typeof g.wd !== "number" || g.wd<1 || g.wd>7) problems.push("schedule.wd");
+          if (!Array.isArray(g.entries)) { problems.push("schedule.entries"); continue; }
+          for (const e of g.entries){
+            if (typeof e.min_hours !== "number") problems.push("entries.min_hours");
+            if (!Array.isArray(e.ranges)) { problems.push("entries.ranges"); continue; }
+            for (const r of e.ranges){
+              if (!r.from || !r.to) { problems.push("range.from/to"); continue; }
+              if (typeof r.from.wd !== "number" || r.from.wd<1||r.from.wd>7) problems.push("range.from.wd");
+              if (typeof r.to.wd   !== "number" || r.to.wd<1||r.to.wd>7)   problems.push("range.to.wd");
+              if (!isValidTime(r.from.time)) problems.push("range.from.time");
+              if (!isValidTime(r.to.time))   problems.push("range.to.time");
+            }
+          }
+        }
+      }
+
+      const ok = problems.length===0;
+      const el = $("#valres");
+      el.textContent = ok ? "OK" : ("Проблемы: " + problems.join(", "));
+      el.className = ok ? "ok" : "err";
+
+      if (showToast){
+        toast(ok ? "Валидация: OK" : "Валидация: найдены проблемы", ok ? "ok" : "err");
+      }
+      return ok;
+    }
+
+    // ---------- File I/O ----------
+    function onLoadFile(ev){
+      const f = ev.target.files[0];
+      if (!f) return;
+      const fr = new FileReader();
+      fr.onload = () => {
+        try{
+          const obj = JSON.parse(fr.result);
+          state = obj;
+          render();
+          syncJson();
+          toast("Файл загружен: " + f.name, "ok");
+        }catch(e){
+          toast("Ошибка файла: " + e.message, "err");
+        }
+      };
+      fr.readAsText(f);
+      ev.target.value = "";
+    }
+
+    function onSaveFile(){
+      if (!validate(true)) return;
+      const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "relaycfg.json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    // ---------- Telegram send ----------
+    function sendToBot(){
+      if (!validate(true)) return;
+      if (!inTelegram) { toast("Откройте страницу внутри Telegram", "warn"); return; }
+      const payload = {
+        type: "relaycfg.submit",
+        ts: Date.now(),
+        relay: state.relay,
+        telegram: state.telegram || {}
+      };
+      try{
+        Telegram.WebApp.sendData(JSON.stringify(payload));
+        Telegram.WebApp.close(); // опционально: закрыть Mini App
+      }catch(e){
+        toast("Ошибка отправки в Telegram: " + e.message, "err");
+      }
+    }
+
+    // ---------- Schedule UI ----------
+    function render(){
+      // top controls
+      $("#relay-mode").value = state.relay.mode || "threshold";
+      $("#threshold").value = state.relay.threshold ?? 120;
+
+      // ranges
+      const host = $("#ranges");
+      host.innerHTML = "";
+
+      const schedule = Array.isArray(state.relay.schedule) ? state.relay.schedule : [];
+      schedule.forEach((group, gi)=>{
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <div class="row" style="justify-content:space-between; align-items:center">
+            <div>
+              <label>День недели</label>
+              <select data-k="wd" data-gi="${gi}">
+                ${[1,2,3,4,5,6,7].map(wd=>`<option value="${wd}" ${wd==group.wd?"selected":""}>${wd} — ${WDNAMES[wd]}</option>`).join("")}
+              </select>
+            </div>
+            <div style="min-width:180px">
+              <label>Комментарий</label>
+              <input type="text" data-k="comment" data-gi="${gi}" value="${group.comment||""}">
+            </div>
+            <button class="btn btn-err" data-act="delGroup" data-gi="${gi}">Удалить день</button>
+          </div>
+          <div class="hr"></div>
+          <div class="row">
+            <div style="min-width:160px">
+              <label>Минимум часов (сумма в периодах дня)</label>
+              <input type="number" min="0" max="24" step="1" data-k="min_hours" data-gi="${gi}" value="${(group.entries?.[0]?.min_hours??6)}">
+            </div>
+            <span class="tag">entries.mode = schedule</span>
+          </div>
+          <div class="hr"></div>
+          <div class="ranges" data-gi="${gi}">
+            ${(group.entries?.[0]?.ranges||[]).map((r,ri)=>rangeItem(gi,ri,r)).join("")}
+          </div>
+          <div class="row" style="margin-top:10px">
+            <button class="btn btn-ghost" data-act="addRange" data-gi="${gi}">+ Период</button>
+          </div>
+        `;
+        host.appendChild(card);
+      });
+
+      // add day button
+      const add = document.createElement("div");
+      add.className = "row";
+      add.style.marginTop = "10px";
+      add.innerHTML = `<button class="btn btn-ghost" data-act="addGroup">+ Добавить день</button>`;
+      host.appendChild(add);
+    }
+
+    function rangeItem(gi, ri, r){
+      const fromt = r?.from?.time || "00:00";
+      const tot   = r?.to?.time   || "00:00";
+      const fromwd= r?.from?.wd   || 1;
+      const towd  = r?.to?.wd     || 1;
+      const cmt   = r?.comment    || "";
+      return `
+        <div class="range-item" data-gi="${gi}" data-ri="${ri}">
+          <div class="row">
+            <div>
+              <label>от (день)</label>
+              <select data-k="from.wd" data-gi="${gi}" data-ri="${ri}">
+                ${[1,2,3,4,5,6,7].map(wd=>`<option value="${wd}" ${wd==fromwd?"selected":""}>${wd} — ${WDNAMES[wd]}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label>от (время)</label>
+              <input type="text" placeholder="HH:MM" data-k="from.time" data-gi="${gi}" data-ri="${ri}" value="${fromt}">
+            </div>
+            <div>
+              <label>до (день)</label>
+              <select data-k="to.wd" data-gi="${gi}" data-ri="${ri}">
+                ${[1,2,3,4,5,6,7].map(wd=>`<option value="${wd}" ${wd==towd?"selected":""}>${wd} — ${WDNAMES[wd]}</option>`).join("")}
+              </select>
+            </div>
+            <div>
+              <label>до (время)</label>
+              <input type="text" placeholder="HH:MM" data-k="to.time" data-gi="${gi}" data-ri="${ri}" value="${tot}">
+            </div>
+            <div style="flex:1; min-width:200px">
+              <label>Комментарий</label>
+              <input type="text" data-k="comment" data-gi="${gi}" data-ri="${ri}" value="${cmt}">
+            </div>
+            <button class="btn btn-err" data-act="delRange" data-gi="${gi}" data-ri="${ri}">Удалить</button>
+          </div>
+        </div>
+      `;
+    }
+
+    function onRangesInput(e){
+      const t = e.target;
+      const gi = parseInt(t.dataset.gi,10);
+      const ri = t.dataset.ri !== undefined ? parseInt(t.dataset.ri,10) : null;
+      const k  = t.dataset.k;
+      if (gi>=0){
+        ensureScheduleShape();
+        const group = state.relay.schedule[gi];
+        const entry = (group.entries ||= [ { mode:"schedule", min_hours:6, ranges:[] } ])[0];
+
+        if (k === "wd") group.wd = clamp(parseIntSafe(t.value, group.wd),1,7);
+        else if (k === "comment" && ri===null) group.comment = t.value;
+        else if (k === "min_hours") entry.min_hours = clamp(parseIntSafe(t.value, entry.min_hours),0,24);
+        else if (ri!==null){
+          const rng = entry.ranges[ri];
+          if (!rng) return;
+          if (k === "from.wd") rng.from.wd = clamp(parseIntSafe(t.value, rng.from.wd),1,7);
+          if (k === "to.wd")   rng.to.wd   = clamp(parseIntSafe(t.value, rng.to.wd),1,7);
+          if (k === "from.time") rng.from.time = t.value;
+          if (k === "to.time")   rng.to.time   = t.value;
+          if (k === "comment")   rng.comment   = t.value;
+        }
+        syncJson();
+      }
+    }
+
+    function onRangesClick(e){
+      const t = e.target;
+      const act = t.dataset.act;
+      if (!act) return;
+
+      if (act === "addGroup"){
+        (state.relay.schedule ||= []).push({
+          wd: 1, comment:"", entries:[{ mode:"schedule", min_hours:6, ranges:[] }]
+        });
+        render(); syncJson();
+      }
+      if (act === "delGroup"){
+        const gi = parseInt(t.dataset.gi,10);
+        state.relay.schedule.splice(gi,1);
+        render(); syncJson();
+      }
+      if (act === "addRange"){
+        const gi = parseInt(t.dataset.gi,10);
+        ensureScheduleShape();
+        const entry = state.relay.schedule[gi].entries[0];
+        entry.ranges.push({ from:{wd:1,time:"00:00"}, to:{wd:1,time:"00:00"}, comment:"" });
+        render(); syncJson();
+      }
+      if (act === "delRange"){
+        const gi = parseInt(t.dataset.gi,10);
+        const ri = parseInt(t.dataset.ri,10);
+        const entry = state.relay.schedule[gi].entries[0];
+        entry.ranges.splice(ri,1);
+        render(); syncJson();
+      }
+    }
+
+    function ensureScheduleShape(){
+      if (!Array.isArray(state.relay.schedule)) state.relay.schedule = [];
+      for (const g of state.relay.schedule){
+        if (!g.entries) g.entries = [];
+        if (!g.entries[0]) g.entries[0] = { mode:"schedule", min_hours:6, ranges:[] };
+      }
+    }
+
+    // ---------- UX ----------
+    function toast(text, kind="ok"){
+      const el = $("#toast");
+      el.textContent = text;
+      el.className = "hint " + (kind==="ok" ? "ok" : kind==="warn" ? "warn" : "err");
+      el.style.opacity = 1;
+      clearTimeout(el._t);
+      el._t = setTimeout(()=> el.style.opacity=0.0, 2400);
+    }
+
+    window.addEventListener("DOMContentLoaded", init);
   </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="row" style="justify-content:space-between; align-items:center">
+      <h1>Редактор конфигурации реле</h1>
+      <span class="tag tg-badge">…</span>
+    </div>
+
+    <div class="grid">
+      <!-- Форма -->
+      <div class="card">
+        <div class="row" style="gap:16px">
+          <div style="min-width:180px; flex:1">
+            <label>Режим реле</label>
+            <select id="relay-mode">
+              <option value="threshold">threshold — глобальный порог</option>
+              <option value="schedule">schedule — интервалы/минимум часов</option>
+            </select>
+          </div>
+          <div style="min-width:180px">
+            <label>Порог (c/kWh)</label>
+            <input id="threshold" type="number" step="1" min="0" value="120">
+          </div>
+          <div style="align-self:flex-end">
+            <span class="hint">Валидация: <b id="valres" class="ok">OK</b></span>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+
+        <label style="margin-bottom:8px">Расписание (дни/периоды)</label>
+        <div id="ranges"></div>
+      </div>
+
+      <!-- JSON -->
+      <div class="card">
+        <label>relaycfg.json</label>
+        <textarea id="json" spellcheck="false"></textarea>
+        <div class="row" style="gap:8px; margin-top:10px">
+          <button class="btn btn-ghost btn-format">Форматировать</button>
+          <button class="btn btn-ghost btn-applyjson">Применить JSON → форму</button>
+          <button class="btn btn-ghost btn-load">Загрузить файл…</button>
+          <input id="file" type="file" accept=".json,application/json" style="display:none">
+          <button class="btn btn-ok btn-save">Скачать relaycfg.json</button>
+          <button class="btn btn-warn btn-send" style="display:none">Отправить боту</button>
+        </div>
+        <div id="toast" class="hint" style="margin-top:8px; opacity:0"></div>
+        <div class="hr"></div>
+        <p class="hint">
+          Подсказки:<br>
+          • В режиме <b>threshold</b> порог работает везде, а интервалы используются только там, где они определены логикой контроллера.<br>
+          • В режиме <b>schedule</b> в каждом дне задавайте период(ы) и <b>min_hours</b> — контроллер наберёт часов в самых дешёвых окнах внутри указанных периодов.<br>
+          • Откройте эту страницу как <b>Telegram Mini App</b>, чтобы кнопка «Отправить боту» отправила JSON напрямую контроллеру через чат.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Telegram SDK (не обязателен в обычном браузере) -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </body>
 </html>
