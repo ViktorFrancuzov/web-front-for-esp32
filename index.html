@@ -313,5 +313,80 @@ els.copyCfgGet.onclick = async ()=>{ await navigator.clipboard.writeText('/cfgge
 // init
 setMode('schedule'); renderRanges();
 </script>
+
+  <!-- 1) Обязательно подключи Telegram WebApp JS -->
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+<script>
+  // Удобные ссылки на объекты
+  const tg = window.Telegram?.WebApp;
+
+  // Покрас/тема из Telegram (тёмная/светлая автоматически)
+  if (tg) {
+    tg.expand();        // открыть на всю высоту
+    tg.ready();         // сигнализируем Telegram, что UI готов
+  }
+
+  // Собираем JSON из редактора (пример: берём текст из textarea #outJson)
+  function getRelayJsonText() {
+    const ta = document.getElementById('outJson');
+    return ta ? ta.value.trim() : '';
+  }
+
+  // Валидация: проверим что это JSON и есть ключи relay/schedule
+  function validateRelayJsonText(txt) {
+    try {
+      const obj = JSON.parse(txt);
+      if (!obj.relay)  return 'Нет ключа "relay"';
+      // schedule может отсутствовать в режимах manual/threshold — поэтому не требуем жёстко
+      return null;
+    } catch (e) {
+      return 'Некорректный JSON: ' + e.message;
+    }
+  }
+
+  // 2) «Отправить в бота» через Mini App
+  async function sendToBot() {
+    const jsonText = getRelayJsonText();
+    const err = validateRelayJsonText(jsonText);
+    if (err) {
+      if (tg) tg.showPopup({ title: 'Ошибка', message: err, buttons: [{type:'close'}] });
+      else alert(err);
+      return;
+    }
+
+    if (!tg) {
+      // не внутри Telegram — просто подсказываем, что надо скопировать вручную
+      alert('Эта страница не внутри Telegram. Скопируйте JSON и отправьте боту как текст/файл.');
+      return;
+    }
+
+    try {
+      // Лучше отправлять точно строкой JSON
+      // Можно добавить префикс, чтобы на прошивке легче отличать: например, "relaycfg:"
+      tg.sendData(jsonText);      // улетит в message.web_app_data.data
+      tg.HapticFeedback?.impactOccurred('light');
+      tg.showPopup({ title: 'Отправлено', message: 'Конфиг передан боту.\nESP применит его автоматически.', buttons: [{type:'ok'}] });
+      // tg.close(); // если хочется закрывать Mini App после отправки
+    } catch (e) {
+      tg.showPopup({ title: 'Ошибка', message: 'Не удалось отправить: ' + e, buttons: [{type:'close'}] });
+    }
+  }
+
+  // Повесь на твою кнопку:
+  // <button id="btnSendToBot" ...>Отправить в бота</button>
+  window.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('btnSendToBot');
+    if (btn) btn.addEventListener('click', sendToBot);
+  });
+
+  // (Необязательно) Главная кнопка Telegram снизу
+  if (tg) {
+    tg.MainButton.setText('Отправить в бота');
+    tg.MainButton.show();
+    tg.onEvent('mainButtonClicked', sendToBot);
+  }
+</script>
+
 </body>
 </html>
