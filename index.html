@@ -2,471 +2,308 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Relay Config Editor</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Реле по цене — конфиг</title>
   <style>
-    :root { --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#94a3b8; --accent:#22c55e; --warn:#f59e0b; --err:#ef4444; }
-    html,body { margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu; background:var(--bg); color:var(--ink); }
-    .wrap { max-width:1000px; margin:24px auto; padding:0 16px; }
-    h1 { font-size:22px; margin:8px 0 16px; }
-    .grid { display:grid; grid-template-columns:1fr; gap:16px; }
-    @media (min-width:900px){ .grid{ grid-template-columns: 1fr 1fr; } }
-    .card { background:var(--card); border:1px solid #1f2937; border-radius:14px; padding:16px; }
-    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-    label { font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
-    input[type="number"], input[type="text"], select, textarea {
-      width:100%; box-sizing:border-box; background:#0b1220; color:var(--ink);
-      border:1px solid #263244; border-radius:10px; padding:10px 12px; font-size:14px;
-    }
-    textarea { min-height:220px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .btn { cursor:pointer; border:0; border-radius:10px; padding:10px 14px; font-weight:600; }
-    .btn-ghost { background:#0b1220; color:var(--ink); border:1px solid #223046; }
-    .btn-ok { background:var(--accent); color:#062413; }
-    .btn-warn { background:var(--warn); color:#1a1005; }
-    .btn-err { background:var(--err); color:#2b0b0b; }
-    .tag { font-size:12px; padding:3px 8px; border-radius:999px; background:#0b1220; border:1px solid #223046; color:var(--muted); }
-    .hr { height:1px; background:#1f2937; margin:12px 0; }
-    .range-item { border:1px dashed #2b3a54; border-radius:12px; padding:10px; margin-bottom:10px; }
-    .hint { color:var(--muted); font-size:12px; }
-    .ok { color:var(--accent); }
-    .warn { color:var(--warn); }
-    .err { color:var(--err); }
+    body { font: 14px/1.4 system-ui, Arial, sans-serif; padding: 16px; max-width: 980px; margin: 0 auto; }
+    h1 { margin: 0 0 12px; }
+    fieldset { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 12px 0; }
+    legend { padding: 0 8px; color: #666; }
+    label { display: inline-block; margin: 6px 10px 6px 0; }
+    input[type="number"], input[type="text"], select { padding: 6px 8px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .btn { padding: 8px 12px; border-radius: 8px; border: 1px solid #ccc; background: #fafafa; cursor: pointer; }
+    .btn.primary { background: #0ea5e9; color: #fff; border-color: #0ea5e9; }
+    .btn.danger { background: #ef4444; color: #fff; border-color: #ef4444; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #eee; padding: 6px 8px; text-align: left; }
+    textarea { width: 100%; min-height: 180px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .muted { color: #777; }
   </style>
-  <script>
-    // ----- helpers -----
-    const WDNAMES = ["","Пн","Вт","Ср","Чт","Пт","Сб","Вс"]; // 1..7
+</head>
+<body>
+  <h1>Конфиг реле (relaycfg.json)</h1>
 
-    function $ (sel, root=document) { return root.querySelector(sel); }
-    function $$ (sel, root=document) { return Array.from(root.querySelectorAll(sel)); }
+  <fieldset>
+    <legend>Загрузить/вставить текущий JSON</legend>
+    <div class="row">
+      <input type="file" id="fileIn" accept=".json" />
+      <button class="btn" id="btnLoadFile">Загрузить в редактор</button>
+      <span class="muted">или вставьте JSON ниже и нажмите «Разобрать»</span>
+    </div>
+    <textarea id="rawIn" placeholder='Вставьте сюда текущий relaycfg.json'></textarea>
+    <div class="row">
+      <button class="btn" id="btnParse">Разобрать → форму</button>
+      <button class="btn danger" id="btnClear">Очистить</button>
+    </div>
+  </fieldset>
 
-    function emptyRelayConfig(){
+  <fieldset>
+    <legend>Основные</legend>
+    <div class="row">
+      <label>Режим:
+        <select id="relayMode">
+          <option value="threshold">threshold</option>
+          <option value="schedule">schedule</option>
+          <option value="manual">manual</option>
+        </select>
+      </label>
+      <label>Глобальный порог:
+        <input type="number" id="threshold" step="0.01" value="120" />
+      </label>
+      <label title="Ручной режим — состояние реле (для будущего использования контроллером)">
+        Ручной ON:
+        <input type="checkbox" id="manualState" />
+      </label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Минимум часов по интервалам (вложенная схема)</legend>
+    <div class="row">
+      <label>День недели:
+        <select id="wd">
+          <option value="1">Пн</option><option value="2">Вт</option><option value="3">Ср</option>
+          <option value="4">Чт</option><option value="5">Пт</option><option value="6">Сб</option><option value="7">Вс</option>
+        </select>
+      </label>
+      <label>От (HH:MM): <input type="text" id="fromTime" value="11:00" /></label>
+      <label>До (HH:MM): <input type="text" id="toTime" value="20:00" /></label>
+      <label>Минимум часов: <input type="number" id="minHours" step="1" value="6" /></label>
+      <button class="btn" id="btnAddRange">Добавить интервал</button>
+    </div>
+
+    <table id="rangesTable">
+      <thead><tr><th>День</th><th>От</th><th>До</th><th>Мин. часов</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </fieldset>
+
+  <fieldset>
+    <legend>Telegram (опционально, попадёт в relaycfg.json)</legend>
+    <div class="row">
+      <label>price_multiplier: <input type="number" id="priceMultiplier" step="0.01" value="1" /></label>
+      <label>price_note: <input type="text" id="priceNote" placeholder="НДС+сети" /></label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Предпросмотр / выгрузка</legend>
+    <div class="row">
+      <button class="btn primary" id="btnBuild">Сформировать JSON</button>
+      <button class="btn" id="btnCopy">Скопировать в буфер</button>
+      <button class="btn" id="btnDownload">Скачать relaycfg.json</button>
+    </div>
+    <textarea id="rawOut" placeholder='Здесь появится готовый relaycfg.json' readonly></textarea>
+    <div class="muted">Подсказываю: этот текст можно просто отправить боту в личку — прошивка проверит, что есть ключи <code>relay</code> и <code>schedule</code>, сохранит и применит автоматически.</div>
+  </fieldset>
+
+<script>
+const state = {
+  mode: 'threshold',
+  threshold: 120,
+  manual_state: false,
+  ranges: [], // [{wd, from:"HH:MM", to:"HH:MM", min_hours}]
+  price_multiplier: 1,
+  price_note: ''
+};
+
+const els = {
+  fileIn: fileIn,
+  btnLoadFile: btnLoadFile,
+  rawIn: rawIn,
+  btnParse: btnParse,
+  btnClear: btnClear,
+  relayMode: relayMode,
+  threshold: threshold,
+  manualState: manualState,
+  wd: wd,
+  fromTime: fromTime,
+  toTime: toTime,
+  minHours: minHours,
+  btnAddRange: btnAddRange,
+  rangesTableBody: document.querySelector('#rangesTable tbody'),
+  priceMultiplier: priceMultiplier,
+  priceNote: priceNote,
+  btnBuild: btnBuild,
+  btnCopy: btnCopy,
+  btnDownload: btnDownload,
+  rawOut: rawOut
+};
+
+function renderRanges() {
+  els.rangesTableBody.innerHTML = '';
+  state.ranges.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${['Пн','Вт','Ср','Чт','Пт','Сб','Вс'][r.wd-1] || r.wd}</td>
+      <td>${r.from}</td>
+      <td>${r.to}</td>
+      <td>${r.min_hours}</td>
+      <td><button class="btn danger" data-i="${i}">Удалить</button></td>`;
+    els.rangesTableBody.appendChild(tr);
+  });
+  els.rangesTableBody.querySelectorAll('button[data-i]').forEach(b=>{
+    b.onclick = () => { state.ranges.splice(+b.dataset.i,1); renderRanges(); };
+  });
+}
+
+els.btnAddRange.onclick = () => {
+  const r = {
+    wd: +els.wd.value,
+    from: (els.fromTime.value || '').trim(),
+    to: (els.toTime.value || '').trim(),
+    min_hours: Math.max(0, parseInt(els.minHours.value||'0',10))
+  };
+  if (!r.from.match(/^\d{1,2}:\d{2}$/) || !r.to.match(/^\d{1,2}:\d{2}$/) || r.min_hours<=0) {
+    alert('Проверьте формат времени и минимум часов');
+    return;
+  }
+  state.ranges.push(r);
+  renderRanges();
+};
+
+els.relayMode.onchange = () => state.mode = els.relayMode.value;
+els.threshold.oninput = () => state.threshold = +els.threshold.value;
+els.manualState.onchange = () => state.manual_state = !!els.manualState.checked;
+els.priceMultiplier.oninput = () => state.price_multiplier = +els.priceMultiplier.value;
+els.priceNote.oninput = () => state.price_note = els.priceNote.value;
+
+function buildJson() {
+  // Схема под твой парсер:
+  // relay.mode / relay.threshold / relay.schedule (nested), плюс telegram.*
+  const grouped = {};
+  for (const r of state.ranges) {
+    if (!grouped[r.wd]) grouped[r.wd] = [];
+    grouped[r.wd].push(r);
+  }
+
+  const relay = {
+    mode: state.mode,
+    threshold: state.threshold,
+    manual_state: state.manual_state,
+    schedule: Object.keys(grouped).map(wdStr => {
+      const wd = +wdStr;
       return {
-        relay: {
-          mode: "threshold",           // или "schedule"
-          threshold: 120,
-          schedule: [
-            {
-              wd: 1,                   // Понедельник
-              comment: "понедельник (1=Пн … 7=Вс)",
-              entries: [
-                {
-                  mode: "schedule",
-                  min_hours: 6,
-                  ranges: [
-                    {
-                      from: { wd: 1, time: "11:00" },
-                      to:   { wd: 2, time: "07:00" },
-                      comment: "Пн 11:00 → Вт 07:00: набрать минимум 6 часов"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        },
-        telegram: {
-          price_multiplier: 1,
-          price_note: "НДС+сети",
-          daily_price_push: true,
-          daily_price_hour: 2,
-          daily_price_minute: 0
-        }
+        wd,
+        entries: [{
+          mode: "schedule",
+          min_hours: Math.max(...grouped[wd].map(x=>x.min_hours)),
+          ranges: grouped[wd].map(x=>({
+            from: { wd, time: x.from },
+            to:   { wd, time: x.to }
+          }))
+        }]
       };
-    }
+    })
+  };
 
-    function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
-    function isValidTime(s){ return /^\d{2}:\d{2}$/.test(s); }
-    function parseIntSafe(v, def){ const n = parseInt(v,10); return Number.isFinite(n)?n:def; }
+  const telegram = {};
+  if (isFinite(state.price_multiplier)) telegram.price_multiplier = state.price_multiplier;
+  if ((state.price_note||'').length) telegram.price_note = state.price_note;
 
-    // store current state
-    let state = emptyRelayConfig();
-    let inTelegram = false;
+  const doc = { relay, telegram };
 
-    function init(){
-      // Detect Telegram WebApp
-      inTelegram = typeof window.Telegram !== 'undefined' && Telegram.WebApp && Telegram.WebApp.initDataUnsafe;
-      if(inTelegram){
-        Telegram.WebApp.ready();
-        Telegram.WebApp.expand();
-        $(".tg-badge").textContent = "Telegram WebApp";
-        $(".btn-send").style.display = "inline-block";
-      } else {
-        $(".tg-badge").textContent = "Standalone";
-        $(".btn-send").style.display = "none";
-      }
+  // минимальная проверка как на контроллере
+  if (!doc.relay || !doc.relay.schedule) {
+    alert('В JSON нет relay/schedule');
+    return null;
+  }
+  return doc;
+}
 
-      // bind inputs
-      // mode & threshold
-      $("#relay-mode").addEventListener("change", e => { state.relay.mode = e.target.value; render(); syncJson();});
-      $("#threshold").addEventListener("input", e => { state.relay.threshold = parseIntSafe(e.target.value, state.relay.threshold); syncJson();});
+els.btnBuild.onclick = () => {
+  const doc = buildJson();
+  if (!doc) return;
+  els.rawOut.value = JSON.stringify(doc, null, 2);
+};
 
-      // schedule editor events (delegated)
-      $("#ranges").addEventListener("input", onRangesInput);
-      $("#ranges").addEventListener("click", onRangesClick);
+els.btnCopy.onclick = async () => {
+  if (!els.rawOut.value) els.btnBuild.onclick();
+  if (!els.rawOut.value) return;
+  await navigator.clipboard.writeText(els.rawOut.value);
+  alert('Скопировано в буфер. Отправьте текст боту.');
+};
 
-      // buttons
-      $(".btn-load").addEventListener("click", ()=> $("#file").click());
-      $("#file").addEventListener("change", onLoadFile);
-      $(".btn-save").addEventListener("click", onSaveFile);
-      $(".btn-applyjson").addEventListener("click", applyFromJson);
-      $(".btn-format").addEventListener("click", prettyJson);
-      $(".btn-send").addEventListener("click", sendToBot);
+els.btnDownload.onclick = () => {
+  if (!els.rawOut.value) els.btnBuild.onclick();
+  if (!els.rawOut.value) return;
+  const blob = new Blob([els.rawOut.value], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'relaycfg.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
 
-      // seed UI
-      render();
-      syncJson();
-    }
+els.btnClear.onclick = () => {
+  els.rawIn.value = '';
+};
 
-    // ---------- JSON area ----------
-    function syncJson(){
-      $("#json").value = JSON.stringify(state, null, 2);
-      validate();
-    }
+els.btnParse.onclick = () => {
+  const s = els.rawIn.value.trim();
+  if (!s) return;
+  try {
+    const j = JSON.parse(s);
+    // relay
+    if (j.relay) {
+      state.mode = (j.relay.mode || 'threshold');
+      state.threshold = +j.relay.threshold || 0;
+      state.manual_state = !!j.relay.manual_state;
+      els.relayMode.value = state.mode;
+      els.threshold.value = state.threshold;
+      els.manualState.checked = state.manual_state;
 
-    function applyFromJson(){
-      try{
-        const obj = JSON.parse($("#json").value);
-        // минимальная валидация
-        if (!obj.relay || typeof obj.relay !== "object") throw new Error("Нет объекта relay");
-        if (!("mode" in obj.relay)) throw new Error("relay.mode обязателен");
-        if (obj.relay.mode !== "threshold" && obj.relay.mode !== "schedule") throw new Error("relay.mode должен быть 'threshold' или 'schedule'");
-        if (typeof obj.relay.threshold !== "number") throw new Error("relay.threshold должен быть числом");
-        // ok
-        state = obj;
-        render();
-        validate(true);
-        toast("JSON применён к форме");
-      }catch(e){
-        toast("Ошибка JSON: " + e.message, "err");
-      }
-    }
-
-    function prettyJson(){
-      try{
-        const obj = JSON.parse($("#json").value);
-        $("#json").value = JSON.stringify(obj, null, 2);
-        validate(true);
-      }catch(e){
-        toast("Ошибка форматирования: " + e.message, "err");
-      }
-    }
-
-    function validate(showToast){
-      // базовые проверки
-      let problems = [];
-
-      if (state.relay.mode !== "threshold" && state.relay.mode !== "schedule") problems.push("relay.mode");
-      if (typeof state.relay.threshold !== "number") problems.push("relay.threshold");
-
-      // check schedule
-      if (Array.isArray(state.relay.schedule)){
-        for (const g of state.relay.schedule){
-          if (typeof g.wd !== "number" || g.wd<1 || g.wd>7) problems.push("schedule.wd");
-          if (!Array.isArray(g.entries)) { problems.push("schedule.entries"); continue; }
-          for (const e of g.entries){
-            if (typeof e.min_hours !== "number") problems.push("entries.min_hours");
-            if (!Array.isArray(e.ranges)) { problems.push("entries.ranges"); continue; }
-            for (const r of e.ranges){
-              if (!r.from || !r.to) { problems.push("range.from/to"); continue; }
-              if (typeof r.from.wd !== "number" || r.from.wd<1||r.from.wd>7) problems.push("range.from.wd");
-              if (typeof r.to.wd   !== "number" || r.to.wd<1||r.to.wd>7)   problems.push("range.to.wd");
-              if (!isValidTime(r.from.time)) problems.push("range.from.time");
-              if (!isValidTime(r.to.time))   problems.push("range.to.time");
+      // nested schedule → расплющим по дням
+      state.ranges = [];
+      if (Array.isArray(j.relay.schedule)) {
+        for (const g of j.relay.schedule) {
+          const groupWd = +g.wd || 0;
+          if (!g.entries) continue;
+          for (const e of g.entries) {
+            const hoursMin = e.min_hours || e.hours_min || 0;
+            if (!Array.isArray(e.ranges)) continue;
+            for (const r of e.ranges) {
+              const from = r.from?.time || '';
+              const to   = r.to?.time   || '';
+              const wdF  = +(r.from?.wd || groupWd || 0);
+              const wdT  = +(r.to?.wd   || groupWd || 0);
+              // если оба конца в один день — кладём одним интервалом
+              if (wdF && wdT && wdF === wdT) {
+                state.ranges.push({ wd: wdF, from, to, min_hours: +hoursMin });
+              } else if (wdF) {
+                // иначе всё равно добавим как [wdF]
+                state.ranges.push({ wd: wdF, from, to, min_hours: +hoursMin });
+              }
             }
           }
         }
       }
-
-      const ok = problems.length===0;
-      const el = $("#valres");
-      el.textContent = ok ? "OK" : ("Проблемы: " + problems.join(", "));
-      el.className = ok ? "ok" : "err";
-
-      if (showToast){
-        toast(ok ? "Валидация: OK" : "Валидация: найдены проблемы", ok ? "ok" : "err");
-      }
-      return ok;
+      renderRanges();
     }
-
-    // ---------- File I/O ----------
-    function onLoadFile(ev){
-      const f = ev.target.files[0];
-      if (!f) return;
-      const fr = new FileReader();
-      fr.onload = () => {
-        try{
-          const obj = JSON.parse(fr.result);
-          state = obj;
-          render();
-          syncJson();
-          toast("Файл загружен: " + f.name, "ok");
-        }catch(e){
-          toast("Ошибка файла: " + e.message, "err");
-        }
-      };
-      fr.readAsText(f);
-      ev.target.value = "";
+    // telegram
+    if (j.telegram) {
+      state.price_multiplier = +j.telegram.price_multiplier || 1;
+      state.price_note = j.telegram.price_note || '';
+      els.priceMultiplier.value = state.price_multiplier;
+      els.priceNote.value = state.price_note;
     }
+    alert('JSON разобран в форму');
+  } catch (e) {
+    alert('Ошибка парсинга JSON: ' + e);
+  }
+};
 
-    function onSaveFile(){
-      if (!validate(true)) return;
-      const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "relaycfg.json";
-      a.click();
-      URL.revokeObjectURL(a.href);
-    }
+els.btnLoadFile.onclick = async () => {
+  const f = els.fileIn.files?.[0];
+  if (!f) return;
+  const txt = await f.text();
+  els.rawIn.value = txt;
+  els.btnParse.onclick();
+};
 
-    // ---------- Telegram send ----------
-    function sendToBot(){
-      if (!validate(true)) return;
-      if (!inTelegram) { toast("Откройте страницу внутри Telegram", "warn"); return; }
-      const payload = {
-        type: "relaycfg.submit",
-        ts: Date.now(),
-        relay: state.relay,
-        telegram: state.telegram || {}
-      };
-      try{
-        Telegram.WebApp.sendData(JSON.stringify(payload));
-        Telegram.WebApp.close(); // опционально: закрыть Mini App
-      }catch(e){
-        toast("Ошибка отправки в Telegram: " + e.message, "err");
-      }
-    }
-
-    // ---------- Schedule UI ----------
-    function render(){
-      // top controls
-      $("#relay-mode").value = state.relay.mode || "threshold";
-      $("#threshold").value = state.relay.threshold ?? 120;
-
-      // ranges
-      const host = $("#ranges");
-      host.innerHTML = "";
-
-      const schedule = Array.isArray(state.relay.schedule) ? state.relay.schedule : [];
-      schedule.forEach((group, gi)=>{
-        const card = document.createElement("div");
-        card.className = "card";
-        card.innerHTML = `
-          <div class="row" style="justify-content:space-between; align-items:center">
-            <div>
-              <label>День недели</label>
-              <select data-k="wd" data-gi="${gi}">
-                ${[1,2,3,4,5,6,7].map(wd=>`<option value="${wd}" ${wd==group.wd?"selected":""}>${wd} — ${WDNAMES[wd]}</option>`).join("")}
-              </select>
-            </div>
-            <div style="min-width:180px">
-              <label>Комментарий</label>
-              <input type="text" data-k="comment" data-gi="${gi}" value="${group.comment||""}">
-            </div>
-            <button class="btn btn-err" data-act="delGroup" data-gi="${gi}">Удалить день</button>
-          </div>
-          <div class="hr"></div>
-          <div class="row">
-            <div style="min-width:160px">
-              <label>Минимум часов (сумма в периодах дня)</label>
-              <input type="number" min="0" max="24" step="1" data-k="min_hours" data-gi="${gi}" value="${(group.entries?.[0]?.min_hours??6)}">
-            </div>
-            <span class="tag">entries.mode = schedule</span>
-          </div>
-          <div class="hr"></div>
-          <div class="ranges" data-gi="${gi}">
-            ${(group.entries?.[0]?.ranges||[]).map((r,ri)=>rangeItem(gi,ri,r)).join("")}
-          </div>
-          <div class="row" style="margin-top:10px">
-            <button class="btn btn-ghost" data-act="addRange" data-gi="${gi}">+ Период</button>
-          </div>
-        `;
-        host.appendChild(card);
-      });
-
-      // add day button
-      const add = document.createElement("div");
-      add.className = "row";
-      add.style.marginTop = "10px";
-      add.innerHTML = `<button class="btn btn-ghost" data-act="addGroup">+ Добавить день</button>`;
-      host.appendChild(add);
-    }
-
-    function rangeItem(gi, ri, r){
-      const fromt = r?.from?.time || "00:00";
-      const tot   = r?.to?.time   || "00:00";
-      const fromwd= r?.from?.wd   || 1;
-      const towd  = r?.to?.wd     || 1;
-      const cmt   = r?.comment    || "";
-      return `
-        <div class="range-item" data-gi="${gi}" data-ri="${ri}">
-          <div class="row">
-            <div>
-              <label>от (день)</label>
-              <select data-k="from.wd" data-gi="${gi}" data-ri="${ri}">
-                ${[1,2,3,4,5,6,7].map(wd=>`<option value="${wd}" ${wd==fromwd?"selected":""}>${wd} — ${WDNAMES[wd]}</option>`).join("")}
-              </select>
-            </div>
-            <div>
-              <label>от (время)</label>
-              <input type="text" placeholder="HH:MM" data-k="from.time" data-gi="${gi}" data-ri="${ri}" value="${fromt}">
-            </div>
-            <div>
-              <label>до (день)</label>
-              <select data-k="to.wd" data-gi="${gi}" data-ri="${ri}">
-                ${[1,2,3,4,5,6,7].map(wd=>`<option value="${wd}" ${wd==towd?"selected":""}>${wd} — ${WDNAMES[wd]}</option>`).join("")}
-              </select>
-            </div>
-            <div>
-              <label>до (время)</label>
-              <input type="text" placeholder="HH:MM" data-k="to.time" data-gi="${gi}" data-ri="${ri}" value="${tot}">
-            </div>
-            <div style="flex:1; min-width:200px">
-              <label>Комментарий</label>
-              <input type="text" data-k="comment" data-gi="${gi}" data-ri="${ri}" value="${cmt}">
-            </div>
-            <button class="btn btn-err" data-act="delRange" data-gi="${gi}" data-ri="${ri}">Удалить</button>
-          </div>
-        </div>
-      `;
-    }
-
-    function onRangesInput(e){
-      const t = e.target;
-      const gi = parseInt(t.dataset.gi,10);
-      const ri = t.dataset.ri !== undefined ? parseInt(t.dataset.ri,10) : null;
-      const k  = t.dataset.k;
-      if (gi>=0){
-        ensureScheduleShape();
-        const group = state.relay.schedule[gi];
-        const entry = (group.entries ||= [ { mode:"schedule", min_hours:6, ranges:[] } ])[0];
-
-        if (k === "wd") group.wd = clamp(parseIntSafe(t.value, group.wd),1,7);
-        else if (k === "comment" && ri===null) group.comment = t.value;
-        else if (k === "min_hours") entry.min_hours = clamp(parseIntSafe(t.value, entry.min_hours),0,24);
-        else if (ri!==null){
-          const rng = entry.ranges[ri];
-          if (!rng) return;
-          if (k === "from.wd") rng.from.wd = clamp(parseIntSafe(t.value, rng.from.wd),1,7);
-          if (k === "to.wd")   rng.to.wd   = clamp(parseIntSafe(t.value, rng.to.wd),1,7);
-          if (k === "from.time") rng.from.time = t.value;
-          if (k === "to.time")   rng.to.time   = t.value;
-          if (k === "comment")   rng.comment   = t.value;
-        }
-        syncJson();
-      }
-    }
-
-    function onRangesClick(e){
-      const t = e.target;
-      const act = t.dataset.act;
-      if (!act) return;
-
-      if (act === "addGroup"){
-        (state.relay.schedule ||= []).push({
-          wd: 1, comment:"", entries:[{ mode:"schedule", min_hours:6, ranges:[] }]
-        });
-        render(); syncJson();
-      }
-      if (act === "delGroup"){
-        const gi = parseInt(t.dataset.gi,10);
-        state.relay.schedule.splice(gi,1);
-        render(); syncJson();
-      }
-      if (act === "addRange"){
-        const gi = parseInt(t.dataset.gi,10);
-        ensureScheduleShape();
-        const entry = state.relay.schedule[gi].entries[0];
-        entry.ranges.push({ from:{wd:1,time:"00:00"}, to:{wd:1,time:"00:00"}, comment:"" });
-        render(); syncJson();
-      }
-      if (act === "delRange"){
-        const gi = parseInt(t.dataset.gi,10);
-        const ri = parseInt(t.dataset.ri,10);
-        const entry = state.relay.schedule[gi].entries[0];
-        entry.ranges.splice(ri,1);
-        render(); syncJson();
-      }
-    }
-
-    function ensureScheduleShape(){
-      if (!Array.isArray(state.relay.schedule)) state.relay.schedule = [];
-      for (const g of state.relay.schedule){
-        if (!g.entries) g.entries = [];
-        if (!g.entries[0]) g.entries[0] = { mode:"schedule", min_hours:6, ranges:[] };
-      }
-    }
-
-    // ---------- UX ----------
-    function toast(text, kind="ok"){
-      const el = $("#toast");
-      el.textContent = text;
-      el.className = "hint " + (kind==="ok" ? "ok" : kind==="warn" ? "warn" : "err");
-      el.style.opacity = 1;
-      clearTimeout(el._t);
-      el._t = setTimeout(()=> el.style.opacity=0.0, 2400);
-    }
-
-    window.addEventListener("DOMContentLoaded", init);
-  </script>
-</head>
-<body>
-  <div class="wrap">
-    <div class="row" style="justify-content:space-between; align-items:center">
-      <h1>Редактор конфигурации реле</h1>
-      <span class="tag tg-badge">…</span>
-    </div>
-
-    <div class="grid">
-      <!-- Форма -->
-      <div class="card">
-        <div class="row" style="gap:16px">
-          <div style="min-width:180px; flex:1">
-            <label>Режим реле</label>
-            <select id="relay-mode">
-              <option value="threshold">threshold — глобальный порог</option>
-              <option value="schedule">schedule — интервалы/минимум часов</option>
-            </select>
-          </div>
-          <div style="min-width:180px">
-            <label>Порог (c/kWh)</label>
-            <input id="threshold" type="number" step="1" min="0" value="120">
-          </div>
-          <div style="align-self:flex-end">
-            <span class="hint">Валидация: <b id="valres" class="ok">OK</b></span>
-          </div>
-        </div>
-
-        <div class="hr"></div>
-
-        <label style="margin-bottom:8px">Расписание (дни/периоды)</label>
-        <div id="ranges"></div>
-      </div>
-
-      <!-- JSON -->
-      <div class="card">
-        <label>relaycfg.json</label>
-        <textarea id="json" spellcheck="false"></textarea>
-        <div class="row" style="gap:8px; margin-top:10px">
-          <button class="btn btn-ghost btn-format">Форматировать</button>
-          <button class="btn btn-ghost btn-applyjson">Применить JSON → форму</button>
-          <button class="btn btn-ghost btn-load">Загрузить файл…</button>
-          <input id="file" type="file" accept=".json,application/json" style="display:none">
-          <button class="btn btn-ok btn-save">Скачать relaycfg.json</button>
-          <button class="btn btn-warn btn-send" style="display:none">Отправить боту</button>
-        </div>
-        <div id="toast" class="hint" style="margin-top:8px; opacity:0"></div>
-        <div class="hr"></div>
-        <p class="hint">
-          Подсказки:<br>
-          • В режиме <b>threshold</b> порог работает везде, а интервалы используются только там, где они определены логикой контроллера.<br>
-          • В режиме <b>schedule</b> в каждом дне задавайте период(ы) и <b>min_hours</b> — контроллер наберёт часов в самых дешёвых окнах внутри указанных периодов.<br>
-          • Откройте эту страницу как <b>Telegram Mini App</b>, чтобы кнопка «Отправить боту» отправила JSON напрямую контроллеру через чат.
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Telegram SDK (не обязателен в обычном браузере) -->
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+// init
+renderRanges();
+</script>
 </body>
 </html>
