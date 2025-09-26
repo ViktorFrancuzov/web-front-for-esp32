@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Реле по цене — конфиг v0.4</title>
+<title>Реле по цене — конфиг v0.5</title>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -144,11 +144,7 @@ const state = {
   manual_state: false,
   default_min_hours: 6,
   auto_span: true,
-  // каждая запись — один range + принадлежность группе
-  ranges: [
-    // { group_wd, from_wd, from, to_wd, to, min_hours }
-  ],
-  // telegram
+  ranges: [],
   price_multiplier: 1,
   price_note: '',
   telegramExtra: {}
@@ -171,7 +167,6 @@ function setMode(m){
   $('thresholdBox').style.display = (m==='threshold') ? '' : 'none';
 }
 
-// events: основные
 $('modeSeg').addEventListener('click', e=>{
   const b = e.target.closest('button'); if(!b) return; setMode(b.dataset.mode);
 });
@@ -180,13 +175,11 @@ $('manualState').onchange = ()=> state.manual_state = $('manualState').checked;
 $('defaultMinHours').oninput = ()=> state.default_min_hours = Math.max(0, parseInt($('defaultMinHours').value||'0',10));
 $('autoSpan').onchange = ()=> state.auto_span = $('autoSpan').checked;
 
-// Telegram
 $('priceMultiplier').oninput = ()=> state.price_multiplier = +$('priceMultiplier').value;
 $('priceNote').oninput = ()=> state.price_note = $('priceNote').value;
 
-// helpers
 function hmToMinutes(t){
-  const m = /^(\d{1,2}):(\d{2})$/.exec(t);  // корректная регулярка
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t);
   return m ? (+m[1])*60 + (+m[2]) : null;
 }
 function nextWd(wd){ return wd>=7 ? 1 : (wd+1); }
@@ -210,7 +203,6 @@ function renderRanges(){
   });
 }
 
-// добавить интервал
 $('btnAddRange').onclick = ()=>{
   const group_wd = +$('grpWd').value;
   const from_wd  = +$('fromWd').value;
@@ -225,7 +217,6 @@ $('btnAddRange').onclick = ()=>{
   log('Интервал добавлен');
 };
 
-// загрузка файла
 $('btnPaste').onclick = async ()=>{
   try{ $('rawIn').value = await navigator.clipboard.readText(); log('Вставлено из буфера'); }
   catch(e){ log('Не удалось прочитать из буфера', true); }
@@ -237,7 +228,6 @@ $('fileIn').addEventListener('change', async e=>{
   log('Файл загружен, жми «Разобрать → форму»');
 });
 
-// разбор JSON → форму
 $('btnParse').onclick = ()=>{
   const s = $('rawIn').value.trim();
   if (!s) return log('Пустой ввод', true);
@@ -245,12 +235,15 @@ $('btnParse').onclick = ()=>{
     const j = JSON.parse(s);
     if (!j.relay) return log('Нет ключа relay', true);
 
-    // основные
     setMode(j.relay.mode || 'schedule');
     state.threshold = +j.relay.threshold || 0; $('threshold').value = state.threshold;
     state.manual_state = !!j.relay.manual_state; $('manualState').checked = state.manual_state;
 
-    // интервалы
+    state.default_min_hours = j.relay.default_min_hours ?? 6;
+    $('defaultMinHours').value = state.default_min_hours;
+    state.auto_span = j.relay.auto_span ?? true;
+    $('autoSpan').checked = state.auto_span;
+
     state.ranges = [];
     if (Array.isArray(j.relay.schedule)) {
       for (const g of j.relay.schedule) {
@@ -273,7 +266,6 @@ $('btnParse').onclick = ()=>{
       }
     }
 
-    // telegram
     state.telegramExtra = {};
     state.price_multiplier = +((j.telegram && j.telegram.price_multiplier)!=null ? j.telegram.price_multiplier : 1);
     state.price_note      = (j.telegram && j.telegram.price_note) || '';
@@ -291,10 +283,8 @@ $('btnParse').onclick = ()=>{
   }catch(e){ log('Ошибка JSON: '+e.message, true); }
 };
 
-// сборка формы → JSON
 $('btnBuild').onclick = ()=>{
   try{
-    // сгруппировать по group_wd (именно как в схеме schedule[].wd)
     const grouped = {};
     for (const r of state.ranges) {
       (grouped[r.group_wd] ??= []).push(r);
@@ -303,7 +293,6 @@ $('btnBuild').onclick = ()=>{
     const schedule = Object.keys(grouped).map(k=>{
       const groupWd = +k;
       const ranges = grouped[k].map(x=>{
-        // если to_wd не задан, а auto_span включён — аккуратно подставим переход по времени
         let to_wd = x.to_wd || x.from_wd;
         if (state.auto_span && x.to_wd==null) {
           const fm = hmToMinutes(x.from), tm = hmToMinutes(x.to);
@@ -315,16 +304,15 @@ $('btnBuild').onclick = ()=>{
           min_hours: x.min_hours
         };
       });
-      return {
-        wd: groupWd,
-        entries: [{ mode: "schedule", ranges }]
-      };
+      return { wd: groupWd, entries: [{ mode: "schedule", ranges }] };
     });
 
     const relay = {
       mode: state.mode,
       threshold: state.threshold,
       manual_state: state.manual_state,
+      default_min_hours: state.default_min_hours,
+      auto_span: state.auto_span,
       schedule
     };
 
@@ -340,11 +328,10 @@ $('btnBuild').onclick = ()=>{
   }catch(e){ log('Ошибка сборки: '+e.message, true); }
 };
 
-// скачать
 $('btnDownload').onclick = ()=>{
   if (!$('rawOut').value) $('btnBuild').click();
   if (!$('rawOut').value) return;
-  const blob = new Blob([$(['rawOut']).value], {type:'application/json'});
+  const blob = new Blob([$('rawOut').value], {type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'relaycfg.json';
@@ -352,7 +339,6 @@ $('btnDownload').onclick = ()=>{
   URL.revokeObjectURL(a.href);
 };
 
-// init
 setMode('schedule');
 renderRanges();
 </script>
