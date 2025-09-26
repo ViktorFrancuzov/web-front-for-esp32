@@ -51,7 +51,6 @@
   tbody tr td:first-child{border-radius:10px 0 0 10px}
   tbody tr td:last-child{border-radius:0 10px 10px 0}
   .muted{color:var(--muted)}
-  .hint{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -133,7 +132,6 @@
     <legend>Редактор / импорт</legend>
     <div class="row">
       <input type="file" id="fileIn" accept=".json">
-      <button class="btn" id="btnLoadFile">Загрузить файл</button>
       <button class="btn" id="btnPaste">Вставить из буфера</button>
     </div>
     <textarea id="rawIn" placeholder="Вставьте сюда текущий relaycfg.json и нажмите «Разобрать»"></textarea>
@@ -146,261 +144,132 @@
   <fieldset>
     <legend>Предпросмотр / выгрузка</legend>
     <div class="row" style="gap:8px">
-      <button class="btn" id="btnBuild">Сформировать JSON</button>
+      <button class="btn primary" id="btnBuild">Сформировать JSON</button>
       <button class="btn" id="btnCopy">Скопировать</button>
       <button class="btn" id="btnDownload">Скачать relaycfg.json</button>
-      <button class="btn primary" id="btnSendToBot">Отправить в бота</button>
-      <span class="hint" id="saveHint" style="margin-left:auto"> </span>
     </div>
-    <textarea id="rawOut" placeholder="Готовый relaycfg.json (отправь боту текстом/файлом или через кнопку «Отправить в бота» в Mini App)"></textarea>
-    <div class="muted">Контроллер проверит наличие ключа <code>relay</code> и применит автоматически.</div>
+    <textarea id="rawOut" placeholder="Готовый relaycfg.json (отправь боту текстом или файлом)"></textarea>
+    <div class="muted">Контроллер проверит наличие ключей <code>relay</code> и <code>schedule</code> и применит автоматически.</div>
   </fieldset>
+
+  <div id="log" class="hint" style="margin-top:8px; white-space:pre-wrap"></div>
 </div>
 
-<!-- Telegram WebApp JS (один раз) -->
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-
 <script>
-(function(){
-  if (window.Telegram && Telegram.WebApp) {
-    document.body.classList.add('tg');
-    try{Telegram.WebApp.ready();Telegram.WebApp.expand();}catch(e){}
-  }
-})();
-
-// ===== состояние =====
-const state = {
-  mode: 'schedule',
-  threshold: 120,
-  manual_state: false,
-  default_min_hours: 6,
-  ranges: [],
-  price_multiplier: 1,
-  price_note: ''
-};
-
-const $$ = sel => document.querySelector(sel);
+// helpers
 function $(id){ return document.getElementById(id); }
+const $$ = sel => document.querySelector(sel);
 
-const els = {
-  botUser: $('#botUser'),
-  openBot: $('#btnOpenBot'), copyStatus: $('#btnCopyStatus'), copyCfgGet: $('#btnCopyCfgGet'),
-  modeSeg: $('#modeSeg'), threshBox: $('#thresholdBox'), threshold: $('#threshold'), manualState: $('#manualState'),
-  defMin: $('#defaultMinHours'),
-  wd: $('#wd'), from: $('#fromTime'), to: $('#toTime'), min: $('#minHours'), add: $('#btnAddRange'),
-  tableBody: document.querySelector('#rangesTable tbody'),
-  pm: $('#priceMultiplier'), pn: $('#priceNote'),
-  fileIn: $('#fileIn'), loadFile: $('#btnLoadFile'), paste: $('#btnPaste'),
-  rawIn: $('#rawIn'), parse: $('#btnParse'), clear: $('#btnClear'),
-  build: $('#btnBuild'), copy: $('#btnCopy'), download: $('#btnDownload'), rawOut: $('#rawOut'),
-  sendToBot: $('#btnSendToBot'), saveHint: $('#saveHint')
+function log(msg,isErr=false){
+  const el=$('#log'); if(!el) return;
+  el.style.color=isErr?'var(--err)':'var(--muted)';
+  el.textContent=(isErr?'⚠️ ':'ℹ️ ')+msg;
+}
+window.addEventListener('error', e=>log('JS error: '+e.message,true));
+
+const state={mode:'schedule',threshold:120,manual_state:false,default_min_hours:6,ranges:[],price_multiplier:1,price_note:''};
+
+const els={
+  botUser:$('#botUser'),
+  openBot:$('#btnOpenBot'),copyStatus:$('#btnCopyStatus'),copyCfgGet:$('#btnCopyCfgGet'),
+  modeSeg:$('#modeSeg'),threshBox:$('#thresholdBox'),threshold:$('#threshold'),manualState:$('#manualState'),
+  defMin:$('#defaultMinHours'),
+  wd:$('#wd'),from:$('#fromTime'),to:$('#toTime'),min:$('#minHours'),add:$('#btnAddRange'),
+  tableBody:$('#rangesTable')?.querySelector('tbody'),
+  pm:$('#priceMultiplier'),pn:$('#priceNote'),
+  fileIn:$('#fileIn'),paste:$('#btnPaste'),
+  rawIn:$('#rawIn'),parse:$('#btnParse'),clear:$('#btnClear'),
+  build:$('#btnBuild'),copy:$('#btnCopy'),download:$('#btnDownload'),rawOut:$('#rawOut')
 };
 
-// ===== режимы =====
-function setMode(m){
-  state.mode = m;
-  els.modeSeg.querySelectorAll('button').forEach(b=>{
-    b.classList.toggle('active', b.dataset.mode===m);
-  });
-  els.threshBox.style.display = (m==='threshold') ? '' : 'none';
-}
-els.modeSeg.addEventListener('click', (e)=>{
-  const b = e.target.closest('button'); if(!b) return;
-  setMode(b.dataset.mode);
-});
-els.threshold.oninput = ()=> state.threshold = +els.threshold.value;
-els.manualState.onchange = ()=> state.manual_state = !!els.manualState.checked;
-els.defMin.oninput = ()=> state.default_min_hours = Math.max(0, parseInt(els.defMin.value||'0',10));
+function setMode(m){state.mode=m;els.modeSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));els.threshBox.style.display=(m==='threshold')?'':'none';}
+els.modeSeg.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;setMode(b.dataset.mode);});
+els.threshold.oninput=()=>state.threshold=+els.threshold.value;
+els.manualState.onchange=()=>state.manual_state=!!els.manualState.checked;
+els.defMin.oninput=()=>state.default_min_hours=Math.max(0,parseInt(els.defMin.value||'0',10));
 
-// ===== интервалы =====
 function renderRanges(){
   els.tableBody.innerHTML='';
   const names=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
   state.ranges.forEach((r,i)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${names[r.wd-1]||r.wd}</td>
-      <td>${r.from}</td><td>${r.to}</td><td>${r.min_hours}</td>
-      <td><button class="btn danger" data-i="${i}">Удалить</button></td>`;
+    tr.innerHTML=`<td>${names[r.wd-1]||r.wd}</td><td>${r.from}</td><td>${r.to}</td><td>${r.min_hours}</td><td><button class="btn danger" data-i="${i}">Удалить</button></td>`;
     els.tableBody.appendChild(tr);
   });
   els.tableBody.querySelectorAll('button[data-i]').forEach(b=>{
-    b.onclick=()=>{ state.ranges.splice(+b.dataset.i,1); renderRanges(); saveDraftSoon(); };
+    b.onclick=()=>{state.ranges.splice(+b.dataset.i,1);renderRanges();};
   });
 }
-els.add.onclick = ()=>{
-  const r={
-    wd:+els.wd.value,
-    from:(els.from.value||'').trim(),
-    to:(els.to.value||'').trim(),
-    min_hours: Math.max(0, parseInt((els.min.value||state.default_min_hours),10))
-  };
-  if(!/^\d{1,2}:\d{2}$/.test(r.from)||!/^\d{1,2}:\d{2}$/.test(r.to)||r.min_hours<=0){
-    alert('Проверьте время и минимум часов'); return;
-  }
-  state.ranges.push(r); renderRanges(); saveDraftSoon();
+els.add.onclick=()=>{
+  const r={wd:+els.wd.value,from:(els.from.value||'').trim(),to:(els.to.value||'').trim(),min_hours:Math.max(0,parseInt((els.min.value||state.default_min_hours),10))};
+  if(!/^\d{1,2}:\d{2}$/.test(r.from)||!/^\d{1,2}:\d{2}$/.test(r.to)||r.min_hours<=0){log('Проверьте время и минимум часов',true);return;}
+  state.ranges.push(r);renderRanges();log('Интервал добавлен');
 };
 
-// ===== telegram-поля =====
-els.pm.oninput = ()=> { state.price_multiplier = +els.pm.value; saveDraftSoon(); };
-els.pn.oninput = ()=> { state.price_note = els.pn.value; saveDraftSoon(); };
+els.pm.oninput=()=>state.price_multiplier=+els.pm.value;
+els.pn.oninput=()=>state.price_note=els.pn.value;
 
-// ===== сборка JSON =====
-function buildJson(){
-  const grouped={};
-  for(const r of state.ranges){ (grouped[r.wd]??=[]).push(r); }
-  const schedule = Object.keys(grouped).map(k=>{
-    const wd=+k, arr=grouped[k];
-    return {
-      wd,
-      entries:[{
-        mode:"schedule",
-        min_hours: Math.max(...arr.map(x=>x.min_hours)),
-        ranges: arr.map(x=>({ from:{wd,time:x.from}, to:{wd,time:x.to} }))
-      }]
-    };
-  });
-  const relay = { mode: state.mode, threshold: state.threshold, manual_state: state.manual_state, schedule };
-  const doc = { relay, telegram: {} };
-  if (isFinite(state.price_multiplier)) doc.telegram.price_multiplier = state.price_multiplier;
-  if ((state.price_note||'').length) doc.telegram.price_note = state.price_note;
-  return doc;
-}
-els.build.onclick = ()=> { els.rawOut.value = JSON.stringify(buildJson(), null, 2); saveDraftSoon(true); };
-els.copy.onclick = async ()=>{ if(!els.rawOut.value) els.build.onclick(); if(!els.rawOut.value) return; await navigator.clipboard.writeText(els.rawOut.value); alert('Скопировано — отправьте боту'); };
-els.download.onclick = ()=>{
-  if(!els.rawOut.value) els.build.onclick(); if(!els.rawOut.value) return;
-  const blob=new Blob([els.rawOut.value],{type:'application/json'});
-  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='relaycfg.json'; a.click(); URL.revokeObjectURL(a.href);
-};
+// load file
+els.fileIn?.addEventListener('change',async()=>{try{const f=els.fileIn.files?.[0];if(!f)return;els.rawIn.value=await f.text();log('Файл загружен, жми «Разобрать → форму»');}catch(e){log('Ошибка чтения файла: '+e,true);}});
 
-// ===== импорт =====
-els.clear.onclick = ()=> { els.rawIn.value=''; saveDraftSoon(); };
-els.paste.onclick = async ()=>{ try{ els.rawIn.value = await navigator.clipboard.readText(); saveDraftSoon(); }catch(e){ alert('Не удалось прочитать из буфера'); } };
-els.loadFile.onclick = async ()=>{
-  const f=els.fileIn.files?.[0]; if(!f) return; els.rawIn.value = await f.text(); els.parse.onclick();
-};
-els.parse.onclick = ()=>{
-  const s=els.rawIn.value.trim(); if(!s) return;
+// parse
+els.parse.onclick=()=>{
+  const s=els.rawIn.value.trim();if(!s){log('Поле ввода пустое');return;}
   try{
     const j=JSON.parse(s);
-    if(j.relay){
-      setMode(j.relay.mode||'schedule');
-      els.threshold.value = state.threshold = +j.relay.threshold||0;
-      els.manualState.checked = state.manual_state = !!j.relay.manual_state;
-      state.ranges=[];
-      if(Array.isArray(j.relay.schedule)){
-        for(const g of j.relay.schedule){
-          const groupWd=+g.wd||0; if(!g.entries) continue;
-          for(const e of g.entries){
-            const hoursMin = e.min_hours||e.hours_min||0;
-            if(!Array.isArray(e.ranges)) continue;
-            for(const r of e.ranges){
-              const wd = +(r.from?.wd || groupWd || 0);
-              const from=r.from?.time||''; const to=r.to?.time||'';
-              if(wd && from && to) state.ranges.push({wd,from,to,min_hours:+hoursMin||state.default_min_hours});
-            }
+    if(!j.relay){log('В JSON нет ключа relay',true);return;}
+    setMode(j.relay.mode||'schedule');
+    els.threshold.value=state.threshold=+j.relay.threshold||0;
+    els.manualState.checked=state.manual_state=!!j.relay.manual_state;
+    state.ranges=[];
+    if(Array.isArray(j.relay.schedule)){
+      for(const g of j.relay.schedule){
+        const groupWd=+g.wd||0;
+        if(!Array.isArray(g.entries))continue;
+        for(const e of g.entries){
+          const entryMin=e.min_hours||e.hours_min||0;
+          if(!Array.isArray(e.ranges))continue;
+          for(const r of e.ranges){
+            const wd=+(r.from?.wd||groupWd||0);
+            const from=r.from?.time||'';const to=r.to?.time||'';
+            const mh=+r.min_hours||+entryMin||state.default_min_hours;
+            if(wd&&from&&to)state.ranges.push({wd,from,to,min_hours:mh});
           }
         }
       }
-      renderRanges();
     }
-    if(j.telegram){ els.pm.value = state.price_multiplier = +j.telegram.price_multiplier||1;
-                    els.pn.value = state.price_note = j.telegram.price_note||''; }
-    alert('JSON разобран в форму');
-    saveDraftSoon(true);
-  }catch(e){ alert('Ошибка JSON: '+e); }
+    if(j.telegram){els.pm.value=state.price_multiplier=+j.telegram.price_multiplier||1;els.pn.value=state.price_note=j.telegram.price_note||'';}
+    renderRanges();log('JSON разобран в форму ✔️');
+  }catch(e){log('Ошибка JSON: '+e.message,true);}
 };
 
-// ===== Telegram helpers =====
-els.openBot.onclick = ()=>{
-  const u=(els.botUser.value||'').trim(); if(!u) return alert('Укажи имя бота');
-  window.open('https://t.me/'+u,'_blank');
-};
-els.copyStatus.onclick = async ()=>{ await navigator.clipboard.writeText('/status'); alert('Скопировано: /status'); };
-els.copyCfgGet.onclick = async ()=>{ await navigator.clipboard.writeText('/cfgget'); alert('Скопировано: /cfgget'); };
+els.build.onclick=()=>{try{
+  const grouped={};
+  for(const r of state.ranges){(grouped[r.wd]??=[]).push(r);}
+  const schedule=Object.keys(grouped).map(k=>{
+    const wd=+k,arr=grouped[k];
+    return{wd,entries:[{mode:"schedule",ranges:arr.map(x=>({from:{wd,time:x.from},to:{wd,time:x.to},min_hours:x.min_hours}))}]};
+  });
+  const relay={mode:state.mode,threshold:state.threshold,manual_state:state.manual_state,schedule};
+  const doc={relay,telegram:{}};
+  if(isFinite(state.price_multiplier))doc.telegram.price_multiplier=state.price_multiplier;
+  if((state.price_note||'').length)doc.telegram.price_note=state.price_note;
+  els.rawOut.value=JSON.stringify(doc,null,2);log('JSON сформирован ✔️');
+}catch(e){log('Ошибка при формировании JSON: '+e.message,true);}};
+els.copy.onclick=async()=>{if(!els.rawOut.value)els.build.onclick();if(!els.rawOut.value)return;await navigator.clipboard.writeText(els.rawOut.value);log('Скопировано — отправьте боту');};
+els.download.onclick=()=>{if(!els.rawOut.value)els.build.onclick();if(!els.rawOut.value)return;const blob=new Blob([els.rawOut.value],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='relaycfg.json';a.click();URL.revokeObjectURL(a.href);};
+els.clear.onclick=()=>els.rawIn.value='';
+els.paste.onclick=async()=>{try{els.rawIn.value=await navigator.clipboard.readText();log('Вставлено из буфера — жми «Разобрать»');}catch(e){log('Не удалось прочитать из буфера',true);}};
 
-// ===== Mini App: отправка в бота =====
-const tg = window.Telegram?.WebApp;
-function getRelayJsonText() {
-  const ta = document.getElementById('rawOut');
-  return ta ? ta.value.trim() : '';
-}
-function validateRelayJsonText(txt) {
-  try { const obj = JSON.parse(txt); if (!obj.relay) return 'Нет ключа "relay"'; return null; }
-  catch (e) { return 'Некорректный JSON: ' + e.message; }
-}
-async function sendToBot() {
-  if (!els.rawOut.value.trim()) els.build.click();           // автосборка
-  const jsonText = getRelayJsonText();
-  const err = validateRelayJsonText(jsonText);
-  if (err) { tg ? tg.showPopup({title:'Ошибка',message:err,buttons:[{type:'close'}]}) : alert(err); return; }
-  if (!tg) { alert('Эта страница вне Telegram. Отправьте JSON боту текстом/файлом.'); return; }
-  try {
-    tg.sendData(jsonText);                                   // web_app_data.data
-    tg.HapticFeedback?.impactOccurred('light');
-    tg.showPopup({ title:'Отправлено', message:'Конфиг передан боту.\nESP применит его автоматически.', buttons:[{type:'ok'}] });
-  } catch (e) {
-    tg.showPopup({ title:'Ошибка', message:'Не удалось отправить: '+e, buttons:[{type:'close'}] });
-  }
-}
-els.sendToBot.addEventListener('click', sendToBot);
-if (tg) {
-  tg.MainButton.setText('Отправить в бота');
-  tg.MainButton.show();
-  tg.onEvent('mainButtonClicked', sendToBot);
-}
+// telegram helpers
+els.openBot.onclick=()=>{const u=(els.botUser.value||'').trim();if(!u)return alert('Укажи имя бота');window.open('https://t.me/'+u,'_blank');};
+els.copyStatus.onclick=async()=>{await navigator.clipboard.writeText('/status');log('Скопировано: /status');};
+els.copyCfgGet.onclick=async()=>{await navigator.clipboard.writeText('/cfgget');log('Скопировано: /cfgget');};
 
-// ===== Черновик (localStorage) =====
-const LS_STATE='relaycfg.state.v1';
-function snapshotState() {
-  return {
-    mode: state.mode,
-    threshold: +els.threshold.value || 0,
-    manual_state: !!els.manualState.checked,
-    default_min_hours: +els.defMin.value || 0,
-    ranges: state.ranges,
-    price_multiplier: +els.pm.value || 1,
-    price_note: els.pn.value || '',
-    rawOut: els.rawOut.value || ''
-  };
-}
-function applyState(s) {
-  if (!s) return;
-  setMode(s.mode || 'schedule');
-  els.threshold.value = s.threshold ?? 0; els.threshold.oninput();
-  els.manualState.checked = !!s.manual_state; els.manualState.onchange();
-  els.defMin.value = s.default_min_hours ?? 6; els.defMin.oninput();
-  state.ranges = Array.isArray(s.ranges) ? s.ranges : [];
-  renderRanges();
-  els.pm.value = s.price_multiplier ?? 1; els.pm.oninput();
-  els.pn.value = s.price_note ?? ''; els.pn.oninput();
-  if (s.rawOut) els.rawOut.value = s.rawOut;
-}
-function saveDraft() {
-  try { localStorage.setItem(LS_STATE, JSON.stringify(snapshotState())); savedHint(); } catch(_) {}
-}
-function loadDraft() {
-  try { const raw = localStorage.getItem(LS_STATE); if (!raw) return false; applyState(JSON.parse(raw)); savedHint('черновик загружен'); return true; } catch(_) { return false; }
-}
-function clearDraft() { localStorage.removeItem(LS_STATE); savedHint('черновик очищен'); }
-let saveTimer=null;
-function saveDraftSoon(immediate){
-  if (immediate){ saveDraft(); return; }
-  clearTimeout(saveTimer);
-  saveTimer=setTimeout(saveDraft, 600);
-}
-function savedHint(txt){
-  if(!els.saveHint) return;
-  els.saveHint.textContent = txt || 'черновик сохранён';
-  setTimeout(()=>{ if(els.saveHint.textContent.startsWith('черновик')) els.saveHint.textContent=' '; }, 2000);
-}
-
-// авто-загрузка при входе
-window.addEventListener('DOMContentLoaded', () => { loadDraft(); });
-// автосейв при закрытии
-window.addEventListener('beforeunload', saveDraft);
-
-setMode('schedule'); renderRanges();
+// init
+setMode('schedule');renderRanges();
 </script>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 </body>
 </html>
