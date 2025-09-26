@@ -3,43 +3,46 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Реле по цене — конфиг v0.3</title>
+<title>Реле по цене — конфиг v0.4</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <style>
   :root{
     --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#94a3b8;
-    --line:#1f2937; --accent:#22c55e; --warn:#f59e0b; --err:#ef4444;
-    --input:#0b1220; --input-line:#223046;
+    --line:#223046; --accent:#22c55e; --err:#ef4444;
+    --input:#0b1220;
   }
   body{margin:0;background:var(--bg);color:var(--ink);
     font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Noto Sans',Arial}
-  .wrap{max-width:1000px;margin:24px auto;padding:0 16px}
-  h1{margin:0 0 16px;font-size:22px}
+  .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+  h1{margin:0 0 12px}
   fieldset{background:var(--card);border:1px solid var(--line);
     border-radius:14px;padding:14px;margin:12px 0}
   legend{padding:0 8px;color:var(--muted)}
-  label{color:var(--muted);font-size:13px;display:block;margin:0 0 6px}
   .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
   .col{flex:1 1 220px;min-width:220px}
   input,select,textarea{width:100%;background:var(--input);color:var(--ink);
-    border:1px solid var(--input-line);border-radius:10px;padding:10px 12px;font-size:14px}
-  textarea{min-height:200px;font-family:ui-monospace,monospace}
-  .btn{cursor:pointer;border:1px solid var(--input-line);background:var(--input);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  textarea{min-height:180px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+  .btn{cursor:pointer;border:1px solid var(--line);background:var(--input);
     color:var(--ink);border-radius:10px;padding:10px 14px;font-weight:600}
   .btn.primary{background:var(--accent);color:#062413;border-color:var(--accent)}
   .btn.danger{background:var(--err);color:#fff;border-color:var(--err)}
-  .seg{display:inline-flex;border:1px solid var(--input-line);border-radius:10px;overflow:hidden}
-  .seg button{border:0;background:transparent;padding:8px 12px;color:var(--ink);opacity:.7}
+  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .seg button{border:0;background:transparent;padding:8px 12px;opacity:.7;color:var(--ink)}
   .seg button.active{background:var(--accent);color:#062413;opacity:1}
   table{width:100%;border-collapse:separate;border-spacing:0 6px}
-  thead th{color:var(--muted);font-weight:600;padding:6px 8px}
+  thead th{color:var(--muted);padding:6px 8px;text-align:left}
   tbody td{background:var(--card);border:1px solid var(--line);padding:8px}
   tbody tr td:first-child{border-radius:10px 0 0 10px}
   tbody tr td:last-child{border-radius:0 10px 10px 0}
+  .muted{color:var(--muted)}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Конфиг реле (relaycfg.json) — v0.3</h1>
+  <h1>Конфиг реле (relaycfg.json) — v0.4</h1>
 
   <fieldset>
     <legend>Основные</legend>
@@ -55,113 +58,303 @@
       </div>
       <div><label>Manual ON <input type="checkbox" id="manualState"></label></div>
       <div class="col">
-        <label>Мин. часов по умолчанию</label>
+        <label>Мин. часов по умолчанию (для новых интервалов)</label>
         <input type="number" id="defaultMinHours" value="6">
+      </div>
+      <div>
+        <label><input type="checkbox" id="autoSpan" checked> Автопереход дня, если «to &le; from»</label>
       </div>
     </div>
   </fieldset>
 
   <fieldset>
-    <legend>Интервалы</legend>
+    <legend>Добавить интервал</legend>
     <div class="row">
-      <select id="wd">
-        <option value="1">Пн</option><option value="2">Вт</option><option value="3">Ср</option>
-        <option value="4">Чт</option><option value="5">Пт</option><option value="6">Сб</option><option value="7">Вс</option>
-      </select>
-      <input type="text" id="fromTime" value="11:00">
-      <input type="text" id="toTime" value="20:00">
-      <input type="number" id="minHours" value="6">
+      <div>
+        <label>Группа (schedule.wd)</label>
+        <select id="grpWd"></select>
+      </div>
+      <div>
+        <label>From wd</label>
+        <select id="fromWd"></select>
+      </div>
+      <div><label>From time <input type="text" id="fromTime" value="11:00"></label></div>
+      <div>
+        <label>To wd</label>
+        <select id="toWd"></select>
+      </div>
+      <div><label>To time <input type="text" id="toTime" value="20:00"></label></div>
+      <div><label>min_hours <input type="number" id="minHours" value="6"></label></div>
       <button class="btn" id="btnAddRange">Добавить</button>
     </div>
-    <table><thead><tr><th>День</th><th>От</th><th>До</th><th>Мин.ч</th><th></th></tr></thead>
-      <tbody id="rangesTable"></tbody></table>
+    <div class="muted">Под «Группа (schedule.wd)» понимается ключ <code>wd</code> узла <code>schedule[]</code>, в котором будет лежать диапазон.</div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Интервалы</legend>
+    <table>
+      <thead>
+        <tr><th>Группа</th><th>From (wd,time)</th><th>To (wd,time)</th><th>min_hours</th><th></th></tr>
+      </thead>
+      <tbody id="rangesTable"></tbody>
+    </table>
   </fieldset>
 
   <fieldset>
     <legend>Telegram</legend>
-    <label>price_multiplier <input type="number" id="priceMultiplier" value="1"></label>
-    <label>price_note <input type="text" id="priceNote"></label>
+    <div class="row">
+      <label class="col">price_multiplier <input type="number" id="priceMultiplier" step="0.01" value="1"></label>
+      <label class="col">price_note <input type="text" id="priceNote" placeholder="НДС+сети"></label>
+    </div>
+    <div class="muted">Прочие поля из блока <code>telegram</code> сохраняются как есть (daily_price_push и т.п.).</div>
   </fieldset>
 
   <fieldset>
-    <legend>Редактор</legend>
-    <input type="file" id="fileIn" accept=".json">
-    <button class="btn" id="btnLoadFile">Загрузить файл</button>
-    <textarea id="rawIn"></textarea>
-    <button class="btn" id="btnParse">Разобрать → форму</button>
-    <button class="btn danger" id="btnClear">Очистить</button>
+    <legend>Редактор / импорт</legend>
+    <div class="row">
+      <input type="file" id="fileIn" accept=".json">
+      <button class="btn" id="btnPaste">Вставить из буфера</button>
+    </div>
+    <textarea id="rawIn" placeholder="Вставьте сюда relaycfg.json или загрузите файл"></textarea>
+    <div class="row">
+      <button class="btn" id="btnParse">Разобрать → форму</button>
+      <button class="btn danger" id="btnClear">Очистить</button>
+    </div>
   </fieldset>
 
   <fieldset>
     <legend>Выгрузка</legend>
-    <button class="btn primary" id="btnBuild">Сформировать JSON</button>
-    <textarea id="rawOut"></textarea>
+    <div class="row" style="gap:8px">
+      <button class="btn primary" id="btnBuild">Сформировать JSON</button>
+      <button class="btn" id="btnDownload">Скачать relaycfg.json</button>
+    </div>
+    <textarea id="rawOut" placeholder="Готовый relaycfg.json"></textarea>
   </fieldset>
+
+  <div class="muted" id="log"></div>
 </div>
 
 <script>
-function log(msg,err){console.log(msg);alert(msg);}
-const state={mode:'schedule',threshold:120,manual_state:false,default_min_hours:6,ranges:[],price_multiplier:1,price_note:'',telegramExtra:{}};
-function $(id){return document.getElementById(id);}
-function renderRanges(){
-  const tb=$('rangesTable');tb.innerHTML='';
-  const days=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-  state.ranges.forEach((r,i)=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${days[r.wd-1]}</td><td>${r.from}</td><td>${r.to}</td><td>${r.min_hours}</td>
-    <td><button data-i="${i}">X</button></td>`;
-    tb.appendChild(tr);
-  });
-  tb.querySelectorAll('button').forEach(b=>b.onclick=()=>{state.ranges.splice(b.dataset.i,1);renderRanges();});
+const days = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
+const dayOpts = Array.from({length:7}, (_,i)=>`<option value="${i+1}">${days[i]}</option>`).join('');
+
+const state = {
+  mode: 'schedule',
+  threshold: 120,
+  manual_state: false,
+  default_min_hours: 6,
+  auto_span: true,
+  // каждая запись — один range + принадлежность группе
+  ranges: [
+    // { group_wd, from_wd, from, to_wd, to, min_hours }
+  ],
+  // telegram
+  price_multiplier: 1,
+  price_note: '',
+  telegramExtra: {}
+};
+
+const $ = id => document.getElementById(id);
+$('grpWd').innerHTML = dayOpts;
+$('fromWd').innerHTML = dayOpts;
+$('toWd').innerHTML = dayOpts;
+
+function log(msg, isErr=false){
+  const el = $('log');
+  el.style.color = isErr? '#ef4444' : 'var(--muted)';
+  el.textContent = (isErr? '⚠ ' : 'ℹ ') + msg;
 }
-function setMode(m){state.mode=m;document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('active',b.dataset.mode===m));$('thresholdBox').style.display=(m==='threshold')?'':'none';}
-$('modeSeg').onclick=e=>{const b=e.target.closest('button');if(b)setMode(b.dataset.mode);}
-$('threshold').oninput=()=>state.threshold=+$('threshold').value;
-$('manualState').onchange=()=>state.manual_state=$('manualState').checked;
-$('defaultMinHours').oninput=()=>state.default_min_hours=parseInt($('defaultMinHours').value||'0',10);
-$('btnAddRange').onclick=()=>{state.ranges.push({wd:+$('wd').value,from:$('fromTime').value,to:$('toTime').value,min_hours:+$('minHours').value});renderRanges();};
-$('priceMultiplier').oninput=()=>state.price_multiplier=+$('priceMultiplier').value;
-$('priceNote').oninput=()=>state.price_note=$('priceNote').value;
-$('btnClear').onclick=()=>$('rawIn').value='';
 
-$('btnLoadFile').onclick=async()=>{const f=$('fileIn').files?.[0];if(!f)return;$('rawIn').value=await f.text();};
+function setMode(m){
+  state.mode = m;
+  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
+  $('thresholdBox').style.display = (m==='threshold') ? '' : 'none';
+}
 
-$('btnParse').onclick=()=>{
-  try{const j=JSON.parse($('rawIn').value);
-    setMode(j.relay?.mode||'schedule');
-    state.threshold=j.relay?.threshold||0; $('threshold').value=state.threshold;
-    state.manual_state=!!j.relay?.manual_state; $('manualState').checked=state.manual_state;
-    state.ranges=[];
-    (j.relay?.schedule||[]).forEach(g=>(g.entries||[]).forEach(e=>(e.ranges||[]).forEach(r=>{state.ranges.push({wd:r.from?.wd,from:r.from?.time,to:r.to?.time,min_hours:r.min_hours});})));
-    state.price_multiplier=j.telegram?.price_multiplier||1;$('priceMultiplier').value=state.price_multiplier;
-    state.price_note=j.telegram?.price_note||'';$('priceNote').value=state.price_note;
-    state.telegramExtra={...j.telegram};delete state.telegramExtra.price_multiplier;delete state.telegramExtra.price_note;
-    renderRanges();log('JSON разобран');
-  }catch(e){log('Ошибка JSON: '+e,true);}
-};
+// events: основные
+$('modeSeg').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return; setMode(b.dataset.mode);
+});
+$('threshold').oninput = ()=> state.threshold = +$('threshold').value;
+$('manualState').onchange = ()=> state.manual_state = $('manualState').checked;
+$('defaultMinHours').oninput = ()=> state.default_min_hours = Math.max(0, parseInt($('defaultMinHours').value||'0',10));
+$('autoSpan').onchange = ()=> state.auto_span = $('autoSpan').checked;
 
-function hmToMinutes(t){const m=/^(\\d{1,2}):(\\d{2})$/.exec(t);return m?(+m[1])*60+(+m[2]):null;}
-function nextWd(wd){return wd>=7?1:(wd+1);}
+// Telegram
+$('priceMultiplier').oninput = ()=> state.price_multiplier = +$('priceMultiplier').value;
+$('priceNote').oninput = ()=> state.price_note = $('priceNote').value;
 
-$('btnBuild').onclick=()=>{
-  const grouped={};
-  for(const r of state.ranges)(grouped[r.wd]??=[]).push(r);
-  const schedule=Object.keys(grouped).map(k=>{
-    const wd=+k,arr=grouped[k];
-    const ranges=arr.map(x=>{
-      const fm=hmToMinutes(x.from),tm=hmToMinutes(x.to);
-      const toWd=(tm!=null&&fm!=null&&tm<=fm)?nextWd(x.wd):x.wd;
-      return{from:{wd:x.wd,time:x.from},to:{wd:toWd,time:x.to},min_hours:x.min_hours};
-    });
-    return{wd,entries:[{mode:"schedule",ranges}]};
+// helpers
+function hmToMinutes(t){
+  const m = /^(\d{1,2}):(\d{2})$/.exec(t);  // корректная регулярка
+  return m ? (+m[1])*60 + (+m[2]) : null;
+}
+function nextWd(wd){ return wd>=7 ? 1 : (wd+1); }
+
+function renderRanges(){
+  const tb = $('rangesTable'); tb.innerHTML='';
+  for (let i=0; i<state.ranges.length; i++){
+    const r = state.ranges[i];
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${days[r.group_wd-1]||r.group_wd}</td>
+      <td>${days[r.from_wd-1]||r.from_wd} ${r.from}</td>
+      <td>${days[r.to_wd-1]||r.to_wd} ${r.to}</td>
+      <td>${r.min_hours}</td>
+      <td><button class="btn danger" data-i="${i}">Удалить</button></td>
+    `;
+    tb.appendChild(tr);
+  }
+  tb.querySelectorAll('button[data-i]').forEach(b=>{
+    b.onclick = ()=>{ state.ranges.splice(+b.dataset.i,1); renderRanges(); };
   });
-  const relay={mode:state.mode,threshold:state.threshold,manual_state:state.manual_state,schedule};
-  const telegram={price_multiplier:state.price_multiplier,price_note:state.price_note,...state.telegramExtra};
-  $('rawOut').value=JSON.stringify({relay,telegram},null,2);
-  log('JSON сформирован');
+}
+
+// добавить интервал
+$('btnAddRange').onclick = ()=>{
+  const group_wd = +$('grpWd').value;
+  const from_wd  = +$('fromWd').value;
+  const to_wd    = +$('toWd').value;
+  const from = ($('fromTime').value||'').trim();
+  const to   = ($('toTime').value||'').trim();
+  const mh   = Math.max(0, parseInt(($('minHours').value||state.default_min_hours),10));
+  if (!from || !to) return log('Укажите время from/to', true);
+  if (!/^\d{1,2}:\d{2}$/.test(from) || !/^\d{1,2}:\d{2}$/.test(to)) return log('Формат времени HH:MM', true);
+  state.ranges.push({ group_wd, from_wd, from, to_wd, to, min_hours: mh });
+  renderRanges();
+  log('Интервал добавлен');
 };
 
-setMode('schedule');renderRanges();
+// загрузка файла
+$('btnPaste').onclick = async ()=>{
+  try{ $('rawIn').value = await navigator.clipboard.readText(); log('Вставлено из буфера'); }
+  catch(e){ log('Не удалось прочитать из буфера', true); }
+};
+$('btnClear').onclick = ()=> { $('rawIn').value=''; log('Очищено'); };
+$('fileIn').addEventListener('change', async e=>{
+  const f = e.target.files[0]; if(!f) return;
+  $('rawIn').value = await f.text();
+  log('Файл загружен, жми «Разобрать → форму»');
+});
+
+// разбор JSON → форму
+$('btnParse').onclick = ()=>{
+  const s = $('rawIn').value.trim();
+  if (!s) return log('Пустой ввод', true);
+  try{
+    const j = JSON.parse(s);
+    if (!j.relay) return log('Нет ключа relay', true);
+
+    // основные
+    setMode(j.relay.mode || 'schedule');
+    state.threshold = +j.relay.threshold || 0; $('threshold').value = state.threshold;
+    state.manual_state = !!j.relay.manual_state; $('manualState').checked = state.manual_state;
+
+    // интервалы
+    state.ranges = [];
+    if (Array.isArray(j.relay.schedule)) {
+      for (const g of j.relay.schedule) {
+        const groupWd = +g.wd || 0;
+        if (!Array.isArray(g.entries)) continue;
+        for (const e of g.entries) {
+          if ((e.mode||'schedule') !== 'schedule') continue;
+          if (!Array.isArray(e.ranges)) continue;
+          for (const r of e.ranges) {
+            const from_wd = +(r.from?.wd || groupWd || 0);
+            const to_wd   = +(r.to?.wd   || from_wd || 0);
+            const from    = r.from?.time || '';
+            const to      = r.to?.time   || '';
+            const mh      = +r.min_hours || 0;
+            if (groupWd && from_wd && to_wd && from && to && mh>=0) {
+              state.ranges.push({ group_wd: groupWd, from_wd, from, to_wd, to, min_hours: mh });
+            }
+          }
+        }
+      }
+    }
+
+    // telegram
+    state.telegramExtra = {};
+    state.price_multiplier = +((j.telegram && j.telegram.price_multiplier)!=null ? j.telegram.price_multiplier : 1);
+    state.price_note      = (j.telegram && j.telegram.price_note) || '';
+    $('priceMultiplier').value = state.price_multiplier;
+    $('priceNote').value = state.price_note;
+    if (j.telegram) {
+      for (const [k,v] of Object.entries(j.telegram)) {
+        if (k==='price_multiplier' || k==='price_note') continue;
+        state.telegramExtra[k] = v;
+      }
+    }
+
+    renderRanges();
+    log('JSON разобран ✔');
+  }catch(e){ log('Ошибка JSON: '+e.message, true); }
+};
+
+// сборка формы → JSON
+$('btnBuild').onclick = ()=>{
+  try{
+    // сгруппировать по group_wd (именно как в схеме schedule[].wd)
+    const grouped = {};
+    for (const r of state.ranges) {
+      (grouped[r.group_wd] ??= []).push(r);
+    }
+
+    const schedule = Object.keys(grouped).map(k=>{
+      const groupWd = +k;
+      const ranges = grouped[k].map(x=>{
+        // если to_wd не задан, а auto_span включён — аккуратно подставим переход по времени
+        let to_wd = x.to_wd || x.from_wd;
+        if (state.auto_span && x.to_wd==null) {
+          const fm = hmToMinutes(x.from), tm = hmToMinutes(x.to);
+          if (fm!=null && tm!=null && tm<=fm) to_wd = nextWd(x.from_wd);
+        }
+        return {
+          from: { wd: x.from_wd, time: x.from },
+          to:   { wd: to_wd,    time: x.to   },
+          min_hours: x.min_hours
+        };
+      });
+      return {
+        wd: groupWd,
+        entries: [{ mode: "schedule", ranges }]
+      };
+    });
+
+    const relay = {
+      mode: state.mode,
+      threshold: state.threshold,
+      manual_state: state.manual_state,
+      schedule
+    };
+
+    const telegram = {
+      ...(isFinite(state.price_multiplier) ? { price_multiplier: state.price_multiplier } : {}),
+      ...(state.price_note ? { price_note: state.price_note } : {}),
+      ...state.telegramExtra
+    };
+
+    const out = { relay, telegram };
+    $('rawOut').value = JSON.stringify(out, null, 2);
+    log('JSON сформирован ✔');
+  }catch(e){ log('Ошибка сборки: '+e.message, true); }
+};
+
+// скачать
+$('btnDownload').onclick = ()=>{
+  if (!$('rawOut').value) $('btnBuild').click();
+  if (!$('rawOut').value) return;
+  const blob = new Blob([$(['rawOut']).value], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'relaycfg.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+// init
+setMode('schedule');
+renderRanges();
 </script>
 </body>
 </html>
