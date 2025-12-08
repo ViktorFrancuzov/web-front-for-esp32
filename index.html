@@ -255,6 +255,9 @@
     <label>token
         <input id="token" placeholder="alex123456">
     </label>
+    <label style="flex-direction:row;align-items:center;gap:6px;min-width:unset;width:auto;">
+        <input id="remember" type="checkbox" style="width:auto;min-width:auto;"> сохранять в браузере
+    </label>
 
     <div class="toolbar">
         <button id="btnFetch" class="btn">Скачать данные</button>
@@ -388,6 +391,17 @@
         return 0;
     }
 
+    const LS_KEY = 'esp_ui_prefs';
+    function loadPrefs(){
+        try{
+            return JSON.parse(localStorage.getItem(LS_KEY) || '{}');
+        }catch(_){ return {}; }
+    }
+    function savePrefs(obj){
+        localStorage.setItem(LS_KEY, JSON.stringify(obj || {}));
+    }
+    function clearPrefs(){ localStorage.removeItem(LS_KEY); }
+
     let defaults = { base:'https://script.google.com/macros/s/AKfycbwPfjAExBB9gTKA8ESKdG2sIhFu4H7o8XuY-cVSxC9bGKEPzYCrJ2Mm0VR5uTpHwYya/exec', token:'' };
     let snapshotAutoUpdate = true;   // автообновление включено
     let snapshotPausedByEditor = false; // редактор временно блокирует обновления
@@ -437,6 +451,11 @@
         snapshotTimer = setTimeout(snapshotLoopStep, delayMs);
     }
     async function loadDefaults() {
+        // 0) из localStorage
+        const prefs = loadPrefs();
+        defaults.base  = prefs.base  || defaults.base;
+        defaults.token = prefs.token || defaults.token;
+
         // 1) системный конфиг с сервера
         try {
             const resp = await fetch('/api/system_config', {cache:'no-store'});
@@ -1381,6 +1400,23 @@
         const u = new URL(location.href);
         $('base').value  = u.searchParams.get('base')  || defaults.base  || '';
         $('token').value = u.searchParams.get('token') || defaults.token || '';
+        // чекбокс remember — отмечаем, если есть сохранённые данные
+        const prefs = loadPrefs();
+        $('remember').checked = !!(prefs.base || prefs.token);
+
+        const persist = ()=>{
+            const remember = $('remember').checked;
+            const base = $('base').value.trim();
+            const token = $('token').value.trim();
+            if (remember){
+                savePrefs({base, token});
+            } else {
+                clearPrefs();
+            }
+        };
+        $('remember').addEventListener('change', persist);
+        $('base').addEventListener('change', persist);
+        $('token').addEventListener('change', persist);
 
         // покажем версию UI
         const uiVer = $('uiVersion');
