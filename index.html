@@ -253,7 +253,7 @@
         <input id="base" placeholder="http://192.168.18.6:8089/exec">
     </label>
     <label>token
-        <input id="token" placeholder="alex123456">
+        <input id="token" placeholder="">
     </label>
     <label style="flex-direction:row;align-items:center;gap:6px;min-width:unset;width:auto;">
         <input id="remember" type="checkbox" style="width:auto;min-width:auto;"> сохранять в браузере
@@ -402,10 +402,10 @@
     }
     function clearPrefs(){ localStorage.removeItem(LS_KEY); }
 
-    let defaults = { base:'https://script.google.com/macros/s/AKfycbwPfjAExBB9gTKA8ESKdG2sIhFu4H7o8XuY-cVSxC9bGKEPzYCrJ2Mm0VR5uTpHwYya/exec', token:'' };
+    let defaults = { base:'', token:'' };
     let snapshotAutoUpdate = true;   // автообновление включено
     let snapshotPausedByEditor = false; // редактор временно блокирует обновления
-    let lastConfigCreated = null;   // millis из контроллера (relay_store._snapshot?.millis)
+    let lastConfigCreated = null;   // millis из контроллера (relay_store._snapshot?.millis
     let lastConfigSeen = null;      // когда в последний раз пришёл конфиг
     let lastSendTs = null;          // когда отправили setRules
     let lastLocalEdit = null;       // когда что-то меняли в UI
