@@ -1,346 +1,1614 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Реле по цене — конфиг v0.5</title>
-<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-<meta http-equiv="Pragma" content="no-cache">
-<meta http-equiv="Expires" content="0">
-<style>
-  :root{
-    --bg:#0f172a; --card:#111827; --ink:#e5e7eb; --muted:#94a3b8;
-    --line:#223046; --accent:#22c55e; --err:#ef4444;
-    --input:#0b1220;
-  }
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Noto Sans',Arial}
-  .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
-  h1{margin:0 0 12px}
-  fieldset{background:var(--card);border:1px solid var(--line);
-    border-radius:14px;padding:14px;margin:12px 0}
-  legend{padding:0 8px;color:var(--muted)}
-  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-  .col{flex:1 1 220px;min-width:220px}
-  input,select,textarea{width:100%;background:var(--input);color:var(--ink);
-    border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-  textarea{min-height:180px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
-  .btn{cursor:pointer;border:1px solid var(--line);background:var(--input);
-    color:var(--ink);border-radius:10px;padding:10px 14px;font-weight:600}
-  .btn.primary{background:var(--accent);color:#062413;border-color:var(--accent)}
-  .btn.danger{background:var(--err);color:#fff;border-color:var(--err)}
-  .seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-  .seg button{border:0;background:transparent;padding:8px 12px;opacity:.7;color:var(--ink)}
-  .seg button.active{background:var(--accent);color:#062413;opacity:1}
-  table{width:100%;border-collapse:separate;border-spacing:0 6px}
-  thead th{color:var(--muted);padding:6px 8px;text-align:left}
-  tbody td{background:var(--card);border:1px solid var(--line);padding:8px}
-  tbody tr td:first-child{border-radius:10px 0 0 10px}
-  tbody tr td:last-child{border-radius:0 10px 10px 0}
-  .muted{color:var(--muted)}
-</style>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <title>GAS Debug • Snapshot</title>
+    <style>
+        :root { color-scheme: dark light; }
+        body{ margin:0; font:14px/1.4 system-ui,Segoe UI,Roboto,Arial,sans-serif; }
+        header{
+            padding:12px 16px;
+            display:flex;
+            gap:12px;
+            align-items:end;
+            flex-wrap:wrap;
+            background:#1111;
+        }
+        label{
+            display:flex;
+            flex-direction:column;
+            font-size:12px;
+            gap:4px;
+            min-width:260px;
+        }
+        input{
+            padding:8px 10px;
+            border-radius:8px;
+            border:1px solid #8884;
+            outline:none;
+            background:#0001;
+            color:inherit;
+        }
+        #msg{ margin-left:auto; font-size:12px; opacity:.8; }
+
+        main{
+            padding:12px 16px;
+            display:grid;
+            gap:16px;
+            grid-template-columns:1fr;
+        }
+        .row{
+            display:grid;
+            grid-template-columns: 2fr 1fr;
+            gap:16px;
+        }
+        @media (max-width: 1000px){
+            .row{ grid-template-columns:1fr; }
+        }
+        .card{
+            background:#00000008;
+            border:1px solid #8883;
+            border-radius:14px;
+            padding:12px;
+        }
+        .card h3{
+            margin:0 0 8px;
+            font-size:15px;
+            opacity:.85;
+        }
+        #log{
+            white-space:pre-wrap;
+            font-family:ui-monospace,Consolas,monospace;
+            height:180px;
+            overflow:auto;
+            background:#0000000a;
+            border-radius:8px;
+            padding:8px;
+        }
+        #dl{
+            display:none;
+            margin-left:8px;
+        }
+        #snapMeta, #snapInfo{
+            font-size:12px;
+            opacity:.8;
+        }
+        canvas{
+            width:100% !important;
+            height:360px !important;
+        }
+        .toolbar{
+            display:flex;
+            gap:8px;
+            align-items:center;
+            flex-wrap:wrap;
+        }
+        .card-header{
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:8px;
+        }
+        .muted{ opacity:.7; font-size:12px; }
+        .badge{
+            display:inline-flex;
+            align-items:center;
+            gap:4px;
+            padding:4px 8px;
+            border-radius:999px;
+            background:#111827aa;
+            border:1px solid #4b5563;
+            font-size:12px;
+        }
+
+        .btn{
+            padding:6px 12px;
+            border-radius:999px;
+            border:1px solid #4b5563;
+            background:#111a;
+            color:inherit;
+            font-size:13px;
+            cursor:pointer;
+        }
+        .btn:hover{ background:#1f2933; }
+
+        .pill{
+            display:inline-block;
+            padding:2px 8px;
+            border-radius:999px;
+            font-weight:600;
+            font-size:11px;
+        }
+        .on{  background:#15a34a33; color:#16a34a; }
+        .off{ background:#ef444433; color:#ef4444; }
+        .busy{background:#3b82f633; color:#60a5fa; }
+
+        /* виджеты правил */
+        #rulesBox{
+            display:flex;
+            flex-direction:column;
+            gap:8px;
+            font-size:13px;
+        }
+        .rule{
+            border-radius:10px;
+            padding:8px 10px;
+            border:1px solid #4b556380;
+            background:#02061766;
+        }
+        .rule-header{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:8px;
+            margin-bottom:4px;
+        }
+        .rule-title{ font-weight:600; }
+        .rule-tags{ display:flex; gap:4px; flex-wrap:wrap; }
+        .rule-tag{
+            font-size:11px;
+            padding:2px 6px;
+            border-radius:999px;
+            background:#111827;
+            border:1px solid #4b5563;
+        }
+        .rule-body{
+            font-size:12px;
+            opacity:.85;
+            display:flex;
+            flex-wrap:wrap;
+            gap:10px 16px;
+        }
+        .rule-body span{ white-space:nowrap; }
+
+        .rule-field{
+            display:flex;
+            flex-direction:column;
+            gap:2px;
+            min-width:140px;
+        }
+        .rule-field label{
+            font-size:11px;
+            opacity:.7;
+        }
+        .rule-field input,
+        .rule-field select{
+            font-size:12px;
+            padding:3px 6px;
+            border-radius:6px;
+            border:1px solid #4b556380;
+            background:#020617aa;
+            color:inherit;
+        }
+
+        /* слот-таблица (по умолчанию свернута) */
+        table{ width:100%; border-collapse:collapse; font-size:13px; }
+        thead th{
+            position:sticky;
+            top:0;
+            background:var(--th-bg,#00000011);
+            backdrop-filter:saturate(180%) blur(6px);
+        }
+        th,td{
+            border-bottom:1px solid #8882;
+            padding:6px 8px;
+            text-align:right;
+        }
+        td:first-child, th:first-child{ text-align:left; }
+        #slotsContainer{ display:none; margin-top:8px; max-height:360px; overflow:auto; }
+
+        /* редактор правил */
+        #rulesEditor{
+            display:none;
+            margin-top:8px;
+            width:100%;
+            height:220px;
+            font-family:ui-monospace,Consolas,monospace;
+            font-size:12px;
+            border-radius:10px;
+            border:1px solid #4b556380;
+            background:#02061766;
+            padding:8px;
+            resize:vertical;
+        }
+        /* редактор системного конфига */
+        #sysConfigEditor{
+            display:none;
+            margin-top:8px;
+            width:100%;
+            height:160px;
+            font-family:ui-monospace,Consolas,monospace;
+            font-size:12px;
+            border-radius:10px;
+            border:1px solid #4b556380;
+            background:#0b1222;
+            padding:8px;
+            resize:vertical;
+        }
+        #configStamp{
+            font-size:12px;
+            padding:6px 10px;
+            border-radius:8px;
+            background:#0f172a;
+            border:1px solid #334155;
+            color:#cbd5e1;
+            margin-top:6px;
+            display:inline-flex;
+            gap:10px;
+            align-items:center;
+        }
+        #configStamp span.label{ opacity:0.7; }
+        #configStamp.pending{
+            background:#3b2f0a;
+            border-color:#f59e0b;
+            color:#fcd34d;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-<div class="wrap">
-  <h1>Конфиг реле (relaycfg.json) — v0.4</h1>
+<header>
+    <label>exec URL
+        <input id="base" placeholder="http://192.168.18.6:8089/exec">
+    </label>
+    <label>token
+        <input id="token" placeholder="alex123456">
+    </label>
 
-  <fieldset>
-    <legend>Основные</legend>
+    <div class="toolbar">
+        <button id="btnFetch" class="btn">Скачать данные</button>
+        <span id="snapMeta" class="muted">—</span>
+        <span id="snapInfo" class="muted">—</span>
+        <span id="uiVersion" class="badge">UI ui-0.2.1</span>
+        <a id="dl" class="pill" href="#" download="snapshot.json">Скачать snapshot.json</a>
+        <button id="btnToggleLog" class="btn" style="margin-left:10px;">Свернуть лог</button>
+    </div>
+
+    <div class="toolbar" style="margin-top:6px;">
+        <button id="btnEditSystem" class="btn">Редактировать system_config.json</button>
+        <button id="btnSaveSystem" class="btn" style="display:none;">Сохранить системный конфиг</button>
+        <button id="btnCancelSystem" class="btn" style="display:none;">Отмена</button>
+        <span class="muted">(base/token и др. сохраняются в config/system_config.json)</span>
+    </div>
+    <textarea id="sysConfigEditor"></textarea>
+
+    <div id="msg">…</div>
+</header>
+
+<main>
     <div class="row">
-      <div class="seg" id="modeSeg">
-        <button data-mode="manual">manual</button>
-        <button data-mode="threshold">threshold</button>
-        <button data-mode="schedule" class="active">schedule</button>
-      </div>
-      <div class="col" id="thresholdBox">
-        <label>Threshold</label>
-        <input type="number" id="threshold" step="0.01" value="120">
-      </div>
-      <div><label>Manual ON <input type="checkbox" id="manualState"></label></div>
-      <div class="col">
-        <label>Мин. часов по умолчанию (для новых интервалов)</label>
-        <input type="number" id="defaultMinHours" value="6">
-      </div>
-      <div>
-        <label><input type="checkbox" id="autoSpan" checked> Автопереход дня, если «to &le; from»</label>
-      </div>
+        <div class="card">
+            <h3>График цен (15-мин слоты), план реле и интервалы</h3>
+            <canvas id="priceChart"></canvas>
+            <div class="muted" style="margin-top:6px;">
+                Цена — ступеньками по слотам; План — ступени (ON=1); Интервал — полупрозрачные столбики «busy».
+            </div>
+        </div>
+        <div class="card" id="logCard">
+            <div class="card-header">
+                <h3>Лог</h3>
+            </div>
+            <div id="log"></div>
+        </div>
     </div>
-  </fieldset>
 
-  <fieldset>
-    <legend>Добавить интервал</legend>
-    <div class="row">
-      <div>
-        <label>Группа (schedule.wd)</label>
-        <select id="grpWd"></select>
-      </div>
-      <div>
-        <label>From wd</label>
-        <select id="fromWd"></select>
-      </div>
-      <div><label>From time <input type="text" id="fromTime" value="11:00"></label></div>
-      <div>
-        <label>To wd</label>
-        <select id="toWd"></select>
-      </div>
-      <div><label>To time <input type="text" id="toTime" value="20:00"></label></div>
-      <div><label>min_hours <input type="number" id="minHours" value="6"></label></div>
-      <button class="btn" id="btnAddRange">Добавить</button>
+    <div class="card">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <h3 style="margin-bottom:0;">Правила реле</h3>
+            <button id="btnEditRules" class="btn" style="padding:4px 10px;font-size:12px;">
+                Редактировать JSON
+            </button>
+            <button id="btnSaveRules" class="btn" style="padding:4px 10px;font-size:12px;">
+                Сохранить в контроллер
+            </button>
+            <button id="btnCancelRules" class="btn" style="padding:4px 10px;font-size:12px;display:none;">
+                Отмена
+            </button>
+        </div>
+        <div id="configStamp" style="display:none;">
+            <span class="label">config created:</span>
+            <span id="cfgCreated">—</span>
+            <span class="label">local edit:</span>
+            <span id="cfgLocal">—</span>
+            <span class="label">device edit:</span>
+            <span id="cfgDeviceEdit">—</span>
+            <span class="label">last seen:</span>
+            <span id="cfgSeen">—</span>
+        </div>
+
+        <div id="rulesBox" class="muted" style="margin-top:8px;">
+            Правила ещё не получены.
+        </div>
+
+        <textarea id="rulesEditor"></textarea>
     </div>
-    <div class="muted">Под «Группа (schedule.wd)» понимается ключ <code>wd</code> узла <code>schedule[]</code>, в котором будет лежать диапазон.</div>
-  </fieldset>
 
-  <fieldset>
-    <legend>Интервалы</legend>
-    <table>
-      <thead>
-        <tr><th>Группа</th><th>From (wd,time)</th><th>To (wd,time)</th><th>min_hours</th><th></th></tr>
-      </thead>
-      <tbody id="rangesTable"></tbody>
-    </table>
-  </fieldset>
-
-  <fieldset>
-    <legend>Telegram</legend>
-    <div class="row">
-      <label class="col">price_multiplier <input type="number" id="priceMultiplier" step="0.01" value="1"></label>
-      <label class="col">price_note <input type="text" id="priceNote" placeholder="НДС+сети"></label>
+    <div class="card">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <h3 style="margin-bottom:0;">Системный конфиг устройства</h3>
+            <button id="btnLoadDeviceCfg" class="btn" style="padding:4px 10px;font-size:12px;">Загрузить с сервера</button>
+            <button id="btnSaveDeviceCfg" class="btn" style="padding:4px 10px;font-size:12px;">Сохранить на сервер (для контроллера)</button>
+        </div>
+        <div class="muted" style="margin-top:6px;">Работает через exec base: getSystemConfig/setSystemConfig</div>
+        <textarea id="deviceCfgEditor" style="width:100%;height:180px;font-family:ui-monospace,Consolas,monospace;font-size:12px;border-radius:10px;border:1px solid #4b556380;background:#0b1222;padding:8px;resize:vertical;"></textarea>
     </div>
-    <div class="muted">Прочие поля из блока <code>telegram</code> сохраняются как есть (daily_price_push и т.п.).</div>
-  </fieldset>
 
-  <fieldset>
-    <legend>Редактор / импорт</legend>
-    <div class="row">
-      <input type="file" id="fileIn" accept=".json">
-      <button class="btn" id="btnPaste">Вставить из буфера</button>
+    <div class="card">
+        <div style="display:flex;align-items:center;gap:8px;">
+            <h3 style="margin-bottom:0;">Таблица слотов</h3>
+            <button id="btnSlotsToggle" class="btn" style="padding:4px 10px;font-size:12px;">Показать таблицу</button>
+        </div>
+        <div id="slotsContainer">
+            <table id="tblSlots">
+                <thead>
+                <tr>
+                    <th>Локальное время</th>
+                    <th>Цена</th>
+                    <th>ON</th>
+                    <th>Интервал</th>
+                    <th>Правило</th>
+                </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
     </div>
-    <textarea id="rawIn" placeholder="Вставьте сюда relaycfg.json или загрузите файл"></textarea>
-    <div class="row">
-      <button class="btn" id="btnParse">Разобрать → форму</button>
-      <button class="btn danger" id="btnClear">Очистить</button>
-    </div>
-  </fieldset>
-
-  <fieldset>
-    <legend>Выгрузка</legend>
-    <div class="row" style="gap:8px">
-      <button class="btn primary" id="btnBuild">Сформировать JSON</button>
-      <button class="btn" id="btnDownload">Скачать relaycfg.json</button>
-    </div>
-    <textarea id="rawOut" placeholder="Готовый relaycfg.json"></textarea>
-  </fieldset>
-
-  <div class="muted" id="log"></div>
-</div>
+</main>
 
 <script>
-const days = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
-const dayOpts = Array.from({length:7}, (_,i)=>`<option value="${i+1}">${days[i]}</option>`).join('');
-
-const state = {
-  mode: 'schedule',
-  threshold: 120,
-  manual_state: false,
-  default_min_hours: 6,
-  auto_span: true,
-  ranges: [],
-  price_multiplier: 1,
-  price_note: '',
-  telegramExtra: {}
-};
-
-const $ = id => document.getElementById(id);
-$('grpWd').innerHTML = dayOpts;
-$('fromWd').innerHTML = dayOpts;
-$('toWd').innerHTML = dayOpts;
-
-function log(msg, isErr=false){
-  const el = $('log');
-  el.style.color = isErr? '#ef4444' : 'var(--muted)';
-  el.textContent = (isErr? '⚠ ' : 'ℹ ') + msg;
-}
-
-function setMode(m){
-  state.mode = m;
-  document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.toggle('active', b.dataset.mode===m));
-  $('thresholdBox').style.display = (m==='threshold') ? '' : 'none';
-}
-
-$('modeSeg').addEventListener('click', e=>{
-  const b = e.target.closest('button'); if(!b) return; setMode(b.dataset.mode);
-});
-$('threshold').oninput = ()=> state.threshold = +$('threshold').value;
-$('manualState').onchange = ()=> state.manual_state = $('manualState').checked;
-$('defaultMinHours').oninput = ()=> state.default_min_hours = Math.max(0, parseInt($('defaultMinHours').value||'0',10));
-$('autoSpan').onchange = ()=> state.auto_span = $('autoSpan').checked;
-
-$('priceMultiplier').oninput = ()=> state.price_multiplier = +$('priceMultiplier').value;
-$('priceNote').oninput = ()=> state.price_note = $('priceNote').value;
-
-function hmToMinutes(t){
-  const m = /^(\d{1,2}):(\d{2})$/.exec(t);
-  return m ? (+m[1])*60 + (+m[2]) : null;
-}
-function nextWd(wd){ return wd>=7 ? 1 : (wd+1); }
-
-function renderRanges(){
-  const tb = $('rangesTable'); tb.innerHTML='';
-  for (let i=0; i<state.ranges.length; i++){
-    const r = state.ranges[i];
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${days[r.group_wd-1]||r.group_wd}</td>
-      <td>${days[r.from_wd-1]||r.from_wd} ${r.from}</td>
-      <td>${days[r.to_wd-1]||r.to_wd} ${r.to}</td>
-      <td>${r.min_hours}</td>
-      <td><button class="btn danger" data-i="${i}">Удалить</button></td>
-    `;
-    tb.appendChild(tr);
-  }
-  tb.querySelectorAll('button[data-i]').forEach(b=>{
-    b.onclick = ()=>{ state.ranges.splice(+b.dataset.i,1); renderRanges(); };
-  });
-}
-
-$('btnAddRange').onclick = ()=>{
-  const group_wd = +$('grpWd').value;
-  const from_wd  = +$('fromWd').value;
-  const to_wd    = +$('toWd').value;
-  const from = ($('fromTime').value||'').trim();
-  const to   = ($('toTime').value||'').trim();
-  const mh   = Math.max(0, parseInt(($('minHours').value||state.default_min_hours),10));
-  if (!from || !to) return log('Укажите время from/to', true);
-  if (!/^\d{1,2}:\d{2}$/.test(from) || !/^\d{1,2}:\d{2}$/.test(to)) return log('Формат времени HH:MM', true);
-  state.ranges.push({ group_wd, from_wd, from, to_wd, to, min_hours: mh });
-  renderRanges();
-  log('Интервал добавлен');
-};
-
-$('btnPaste').onclick = async ()=>{
-  try{ $('rawIn').value = await navigator.clipboard.readText(); log('Вставлено из буфера'); }
-  catch(e){ log('Не удалось прочитать из буфера', true); }
-};
-$('btnClear').onclick = ()=> { $('rawIn').value=''; log('Очищено'); };
-$('fileIn').addEventListener('change', async e=>{
-  const f = e.target.files[0]; if(!f) return;
-  $('rawIn').value = await f.text();
-  log('Файл загружен, жми «Разобрать → форму»');
-});
-
-$('btnParse').onclick = ()=>{
-  const s = $('rawIn').value.trim();
-  if (!s) return log('Пустой ввод', true);
-  try{
-    const j = JSON.parse(s);
-    if (!j.relay) return log('Нет ключа relay', true);
-
-    setMode(j.relay.mode || 'schedule');
-    state.threshold = +j.relay.threshold || 0; $('threshold').value = state.threshold;
-    state.manual_state = !!j.relay.manual_state; $('manualState').checked = state.manual_state;
-
-    state.default_min_hours = j.relay.default_min_hours ?? 6;
-    $('defaultMinHours').value = state.default_min_hours;
-    state.auto_span = j.relay.auto_span ?? true;
-    $('autoSpan').checked = state.auto_span;
-
-    state.ranges = [];
-    if (Array.isArray(j.relay.schedule)) {
-      for (const g of j.relay.schedule) {
-        const groupWd = +g.wd || 0;
-        if (!Array.isArray(g.entries)) continue;
-        for (const e of g.entries) {
-          if ((e.mode||'schedule') !== 'schedule') continue;
-          if (!Array.isArray(e.ranges)) continue;
-          for (const r of e.ranges) {
-            const from_wd = +(r.from?.wd || groupWd || 0);
-            const to_wd   = +(r.to?.wd   || from_wd || 0);
-            const from    = r.from?.time || '';
-            const to      = r.to?.time   || '';
-            const mh      = +r.min_hours || 0;
-            if (groupWd && from_wd && to_wd && from && to && mh>=0) {
-              state.ranges.push({ group_wd: groupWd, from_wd, from, to_wd, to, min_hours: mh });
+    /*** --- helpers/UI --- ***/
+    const $  = id => document.getElementById(id);
+    const log = s => {
+        const el = $('log');
+        el.textContent += s + '\n';
+        el.scrollTop = el.scrollHeight;
+    };
+    const APP_VERSION = 'ui-0.2.1';
+    const tz = 'Europe/Riga';
+    const fmtHM = new Intl.DateTimeFormat('ru-LV',{
+        timeZone: tz, hour:'2-digit', minute:'2-digit', hour12:false
+    });
+    function minutesInTz(tsSec){
+        try{
+            const parts = fmtHM.formatToParts(new Date((tsSec|0)*1000));
+            let h = 0, m = 0;
+            for (const p of parts){
+                if (p.type === 'hour')   h = parseInt(p.value,10);
+                if (p.type === 'minute') m = parseInt(p.value,10);
             }
-          }
+            if (Number.isFinite(h) && Number.isFinite(m)){
+                h = (h % 24 + 24) % 24;
+                m = (m % 60 + 60) % 60;
+                return h*60 + m;
+            }
+        } catch(e){
+            console.warn('minutesInTz failed', e);
         }
-      }
+        return 0;
     }
 
-    state.telegramExtra = {};
-    state.price_multiplier = +((j.telegram && j.telegram.price_multiplier)!=null ? j.telegram.price_multiplier : 1);
-    state.price_note      = (j.telegram && j.telegram.price_note) || '';
-    $('priceMultiplier').value = state.price_multiplier;
-    $('priceNote').value = state.price_note;
-    if (j.telegram) {
-      for (const [k,v] of Object.entries(j.telegram)) {
-        if (k==='price_multiplier' || k==='price_note') continue;
-        state.telegramExtra[k] = v;
-      }
+    let defaults = { base:'https://script.google.com/macros/s/AKfycbwPfjAExBB9gTKA8ESKdG2sIhFu4H7o8XuY-cVSxC9bGKEPzYCrJ2Mm0VR5uTpHwYya/exec', token:'' };
+    let snapshotAutoUpdate = true;   // автообновление включено
+    let snapshotPausedByEditor = false; // редактор временно блокирует обновления
+    let lastConfigCreated = null;   // millis из контроллера (relay_store._snapshot?.millis)
+    let lastConfigSeen = null;      // когда в последний раз пришёл конфиг
+    let lastSendTs = null;          // когда отправили setRules
+    let lastLocalEdit = null;       // когда что-то меняли в UI
+    let lastDeviceEdit = null;      // метка из meta.local_edit_ms
+
+    const fmtStamp = (ms) => ms ? `${new Date(ms).toLocaleString()} (${ms})` : '—';
+    function updateConfigStamp(){
+        const box = $('configStamp');
+        if (!box) return;
+        $('cfgCreated').textContent = fmtStamp(lastConfigCreated);
+        $('cfgSeen').textContent    = fmtStamp(lastConfigSeen);
+        $('cfgLocal').textContent   = fmtStamp(lastLocalEdit);
+        $('cfgDeviceEdit').textContent = fmtStamp(lastDeviceEdit);
+        const pending = lastLocalEdit && lastDeviceEdit && Number(lastLocalEdit) !== Number(lastDeviceEdit);
+        box.classList.toggle('pending', !!pending);
+        box.style.display = 'inline-flex';
     }
-
-    renderRanges();
-    log('JSON разобран ✔');
-  }catch(e){ log('Ошибка JSON: '+e.message, true); }
-};
-
-$('btnBuild').onclick = ()=>{
-  try{
-    const grouped = {};
-    for (const r of state.ranges) {
-      (grouped[r.group_wd] ??= []).push(r);
-    }
-
-    const schedule = Object.keys(grouped).map(k=>{
-      const groupWd = +k;
-      const ranges = grouped[k].map(x=>{
-        let to_wd = x.to_wd || x.from_wd;
-        if (state.auto_span && x.to_wd==null) {
-          const fm = hmToMinutes(x.from), tm = hmToMinutes(x.to);
-          if (fm!=null && tm!=null && tm<=fm) to_wd = nextWd(x.from_wd);
+    function touchLocalEdit(){
+        lastLocalEdit = Date.now();
+        if (currentRelayCfg) {
+            currentRelayCfg.meta = currentRelayCfg.meta || {};
+            currentRelayCfg.meta.local_edit_ms = lastLocalEdit;
         }
+        updateConfigStamp();
+    }
+    function enterEditMode() {
+        snapshotAutoUpdate = false;
+        snapshotPausedByEditor = true;
+        stopSnapshotLoop();
+        const editor = $('rulesEditor');
+        if (currentRelayCfg) {
+            editor.value = JSON.stringify(currentRelayCfg, null, 2);
+        }
+        editor.style.display = 'block';
+        $('btnSaveRules').style.display = 'inline-block';
+        $('btnCancelRules').style.display = 'inline-block';
+        setMsg('Редактирование: автообновление остановлено, не забудь сохранить/отменить');
+        touchLocalEdit();
+    }
+
+    function scheduleSnapshot(delayMs) {
+        if (!snapshotAutoUpdate) return;      // 🚫 если автообновление выключено — НИЧЕГО НЕ ДЕЛАТЬ
+        snapshotTimer = setTimeout(snapshotLoopStep, delayMs);
+    }
+    async function loadDefaults() {
+        // 1) системный конфиг с сервера
+        try {
+            const resp = await fetch('/api/system_config', {cache:'no-store'});
+            if (resp.ok) {
+                const js = await resp.json();
+                defaults.base  = js.mock_base  || defaults.base;
+                defaults.token = js.mock_token || defaults.token;
+            }
+        } catch(e){
+            console.warn('system_config load failed', e);
+        }
+        // 2) локальный vars.json как fallback
+        try {
+            const resp = await fetch('vars.json', {cache:'no-store'});
+            if (!resp.ok) return;
+            const js = await resp.json();
+            defaults.base  = defaults.base  || js.base  || '';
+            defaults.token = defaults.token || js.token || '';
+        } catch(e){
+            console.warn('vars.json load failed', e);
+        }
+    }
+
+    function qs() {
+        const u = new URL(location.href);
+        const baseFromInput  = $('base').value.trim()  || defaults.base  || $('base').placeholder;
+        const tokenFromInput = $('token').value.trim() || defaults.token || $('token').placeholder;
         return {
-          from: { wd: x.from_wd, time: x.from },
-          to:   { wd: to_wd,    time: x.to   },
-          min_hours: x.min_hours
+            base:  u.searchParams.get('base')  || baseFromInput,
+            token: u.searchParams.get('token') || tokenFromInput,
         };
-      });
-      return { wd: groupWd, entries: [{ mode: "schedule", ranges }] };
+    }
+
+    function setMsg(s){ $('msg').textContent = s; }
+
+    /*** --- API --- ***/
+    async function api(method, params={}, body=null) {
+        const {base, token} = qs();
+        if (!base || !token) throw new Error('Укажи exec URL и token');
+        const u = new URL(base);
+        u.searchParams.set('token', token);
+        Object.entries(params).forEach(([k,v]) => u.searchParams.set(k, v));
+        const resp = await fetch(u, {
+            method,
+            headers: body ? {'Content-Type':'application/json'} : undefined,
+            body: body ? JSON.stringify(body) : undefined
+        });
+        if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+        return resp.json();
+    }
+
+    /*** --- chart & rules & slots render --- ***/
+    let chart;
+
+    // глобальные данные для подсветки
+    let gSlots = [];
+    let gStepSec = 900;
+    let gPriceData = [];
+
+    // текущая конфигурация реле (то, что будем редактировать и слать как relay)
+    let currentRelayCfg = null;
+
+    // плагин: осветляем всё вне окна правила
+    Chart.register({
+        id: 'ruleWindowHighlighter',
+        beforeDraw(chart, args, opts) {
+            const hl = chart._ruleHighlight;
+            if (!hl || !hl.active || !Array.isArray(hl.ranges) || !hl.ranges.length) return;
+
+            const area = chart.chartArea;
+            const ctx = chart.ctx;
+            const xScale = chart.scales.x;
+
+            const total = chart.data.labels.length;
+            if (!total) return;
+
+            const ranges = hl.ranges
+                .map(r => ({
+                    start: Math.max(0, Math.min(total - 1, r.start)),
+                    end:   Math.max(0, Math.min(total - 1, r.end))
+                }))
+                .filter(r => r.end >= r.start)
+                .sort((a,b)=>a.start-b.start);
+            if (!ranges.length) return;
+
+            ctx.save();
+            ctx.fillStyle = 'rgba(255,255,255,0.18)';
+
+            let cursorX = area.left;
+            for (const r of ranges){
+                const x1 = xScale.getPixelForValue(r.start - 0.5); // левый край
+                const x2 = xScale.getPixelForValue(r.end + 0.5);   // правый край
+                if (x1 > cursorX){
+                    ctx.fillRect(cursorX, area.top, x1 - cursorX, area.height);
+                }
+                cursorX = Math.max(cursorX, x2);
+            }
+            if (cursorX < area.right){
+                ctx.fillRect(cursorX, area.top, area.right - cursorX, area.height);
+            }
+
+            ctx.restore();
+        }
     });
 
-    const relay = {
-      mode: state.mode,
-      threshold: state.threshold,
-      manual_state: state.manual_state,
-      default_min_hours: state.default_min_hours,
-      auto_span: state.auto_span,
-      schedule
-    };
+    Chart.register({
+        id: 'nowTimeLine',
+        beforeDraw(chart, args, opts) {
+            const n = chart._nowPos;
+            if (!n || !n.active) return;
 
-    const telegram = {
-      ...(isFinite(state.price_multiplier) ? { price_multiplier: state.price_multiplier } : {}),
-      ...(state.price_note ? { price_note: state.price_note } : {}),
-      ...state.telegramExtra
-    };
+            const xScale = chart.scales.x;
+            const area = chart.chartArea;
+            const ctx = chart.ctx;
 
-    const out = { relay, telegram };
-    $('rawOut').value = JSON.stringify(out, null, 2);
-    log('JSON сформирован ✔');
-  }catch(e){ log('Ошибка сборки: '+e.message, true); }
-};
+            const idx = n.slotIndex;
+            if (idx < 0 || idx >= chart.data.labels.length) return;
 
-$('btnDownload').onclick = ()=>{
-  if (!$('rawOut').value) $('btnBuild').click();
-  if (!$('rawOut').value) return;
-  const blob = new Blob([$('rawOut').value], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'relaycfg.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
-};
+            // ставим линию по центру слота
+            const x = xScale.getPixelForValue(idx);
 
-setMode('schedule');
-renderRanges();
+            ctx.save();
+            ctx.strokeStyle = 'rgba(239,68,68,0.9)'; // красная пунктирная
+            ctx.lineWidth = 2;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x, area.top);
+            ctx.lineTo(x, area.bottom);
+            ctx.stroke();
+            ctx.restore();
+        }
+    });
+
+    function renderChart(pricesRoot){
+        const slots = pricesRoot?.slots || [];
+
+        // 🔍 Отладка структуры цен
+        try {
+            const keys = pricesRoot && typeof pricesRoot === 'object'
+                ? Object.keys(pricesRoot) : [];
+            log('[chart] pricesRoot keys: ' + keys.join(', ') +
+                '; slots=' + (Array.isArray(slots) ? slots.length : 'not array'));
+        } catch(e){
+            log('[chart debug error] ' + e.message);
+        }
+
+        if (!slots.length){
+            setMsg('Пустые слоты (slots.length=0)');
+            return;
+        }
+        const stepSec = pricesRoot.stepSec || 900;
+
+        gSlots = slots;
+        gStepSec = stepSec;
+
+        const labels   = [];
+        const prices   = [];
+        const onMask   = [];
+        const busyMask = [];
+        const busyN    = [];
+
+        const fmt = new Intl.DateTimeFormat('ru-LV',{
+            timeZone: tz, year:'2-digit', month:'2-digit', day:'2-digit',
+            hour:'2-digit', minute:'2-digit'
+        });
+
+        for (const s of slots){
+            const tsStart = (s.ts|0);
+
+            const dStart = new Date(tsStart*1000);
+            const label = fmt.format(dStart);
+
+            const priceVal = +s.price;
+            const isOn  = !!(s.relay_on || s.on);
+            const isBusy = !!(s.busy || (s.busyN|0) > 0);
+            const bN = s.busyN|0;
+
+            labels.push(label);
+            prices.push(priceVal);
+            onMask.push(isOn ? 1 : 0);
+            busyMask.push(isBusy ? 1 : 0);
+            busyN.push(bN);
+        }
+
+        gPriceData = prices.slice(); // запоминаем для подсветки
+
+        // логируем старт слотов
+        if (Array.isArray(slots) && slots.length) {
+            const startUtc = slots[0].ts | 0;
+            const startDate = new Date(startUtc * 1000);
+            log(`[chart] startUtc=${startUtc} (${startDate.toISOString()}) stepSec=${stepSec}`);
+        }
+
+        // --- вычисляем позицию "текущее время" ---
+        let nowPos = { active:false, slotIndex:0, t:0.5 };
+        try {
+            const nowMs = Date.now();
+            for (let i = 0; i < slots.length; i++) {
+                const startMs = (slots[i].ts | 0) * 1000;
+                const endMs   = startMs + stepSec * 1000;
+                if (nowMs >= startMs && nowMs < endMs) {
+                    const t = (nowMs - startMs) / (endMs - startMs); // 0..1 внутри слота
+                    nowPos = { active:true, slotIndex:i, t };
+                    break;
+                }
+            }
+        } catch (e) {
+            log('[nowTime err] ' + e.message);
+        }
+
+        const ctx = $('priceChart').getContext('2d');
+        if (chart) chart.destroy();
+        chart = new Chart(ctx, {
+            data:{
+                labels,
+                datasets:[
+                    {
+                        // dataset 0 — зелёное выделение линией по окну правила
+                        label:'Выделено правилом',
+                        type:'line',
+                        data:new Array(prices.length).fill(null),
+                        yAxisID:'y',
+                        pointRadius:0,
+                        borderWidth:4,
+                        borderColor:'#22c55e',
+                        tension:0,
+                        order:3
+                    },
+                    {
+                        label:'Интервал (busy)',
+                        type:'bar',
+                        data:busyMask,
+                        yAxisID:'y2',
+                        backgroundColor:'rgba(59,130,246,0.25)',
+                        borderWidth:0,
+                        barPercentage:1.0,
+                        categoryPercentage:1.0,
+                        order:0
+                    },
+                    {
+                        label:'Цена',
+                        type:'line',
+                        data:prices,
+                        yAxisID:'y',
+                        pointRadius:0,
+                        borderWidth:2,
+                        borderColor:'#eab308',
+                        tension:0,
+                        stepped:true,
+                        order:1
+                    },
+                    {
+                        label:'План (ON=1)',
+                        type:'line',
+                        data:onMask,
+                        pointRadius:0,
+                        borderWidth:2,
+                        stepped:true,
+                        borderColor:'#16a34a',
+                        yAxisID:'y1',
+                        order:2
+                    }
+                ]
+            },
+            options:{
+                responsive:true,
+                interaction:{ mode:'index', intersect:false },
+                plugins:{ legend:{ display:true } },
+                scales:{
+                    y:{ type:'linear', position:'left', title:{display:true,text:'Цена'} },
+                    y1:{ type:'linear', position:'right', suggestedMax:1.2,
+                        grid:{ drawOnChartArea:false }, ticks:{ stepSize:1 } },
+                    y2:{ type:'linear', position:'right', display:false, suggestedMax:1.2 }
+                }
+            }
+        });
+
+        // состояние подсветки по умолчанию
+        chart._ruleHighlight = { active:false, startIndex:0, endIndex:0 };
+        chart._nowPos = nowPos;
+
+        setMsg(`Готово: ${slots.length} слотов, шаг ${stepSec} сек`);
+    }
+
+
+    function renderSlotsTable(slots, stepSec){
+        const cont = $('slotsContainer');
+        const tbody = $('tblSlots').querySelector('tbody');
+        tbody.innerHTML = '';
+
+        if (!slots || !slots.length){
+            cont.style.display = 'none';
+            return;
+        }
+
+        const fmt = new Intl.DateTimeFormat('ru-LV',{
+            timeZone: tz, year:'2-digit', month:'2-digit', day:'2-digit',
+            hour:'2-digit', minute:'2-digit'
+        });
+
+        for (const s of slots){
+            const d = new Date((s.ts|0)*1000);
+            const isOn  = !!(s.relay_on || s.on);
+            const isBusy = !!(s.busy || (s.busyN|0) > 0);
+            const bN = s.busyN|0;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${fmt.format(d)}</td>
+                <td>${(+s.price).toFixed(2)}</td>
+                <td><span class="pill ${isOn?'on':'off'}">${isOn?'ON':'OFF'}</span></td>
+                <td>${isBusy ? `<span class="pill busy">busy${bN>1?` ×${bN}`:''}</span>` : '—'}</td>
+                <td>${s.by ?? s.rule_id ?? '-'}</td>
+            `;
+            tbody.appendChild(tr);
+        }
+    }
+
+    // --- подсветка слотов по правилу ---
+
+    function parseHM(str){
+        if (!str) return 0;
+        const m = /^(\d{1,2}):(\d{2})$/.exec(str.trim());
+        if (!m) return 0;
+        let h = parseInt(m[1],10);
+        let mi = parseInt(m[2],10);
+        if (isNaN(h) || isNaN(mi)) return 0;
+        h = Math.max(0, Math.min(23, h));
+        mi = Math.max(0, Math.min(59, mi));
+        return h*60 + mi;
+    }
+
+    function slotsForRule(rule){
+        const res = [];
+        const win = rule.window || {};
+        const kind = win.kind || 'daily';
+
+        if (!gSlots.length) return res;
+
+        if (kind === 'daily' || kind === 'weekly'){
+            const fromMin = parseHM(win.from ?? '00:00');
+            const toMin   = windowToMinutes(win);
+            const cross = toMin <= fromMin;
+
+            gSlots.forEach((s, idx)=>{
+                const minutes = minutesInTz(s.ts|0);
+                // условие дня недели для weekly
+                if (kind === 'weekly' && Array.isArray(win.weekdays) && win.weekdays.length){
+                    const d = new Date((s.ts|0)*1000);
+                    // JS: 0=Sun..6=Sat, API: 1..7 (Mon..Sun)
+                    const jsDay = d.getUTCDay(); // UTC день
+                    const locDay = (jsDay + Math.floor((minutes - (d.getUTCHours()*60 + d.getUTCMinutes()))/1440)) % 7; // rough adjust
+                    const apiDay = locDay === 0 ? 7 : locDay;
+                    if (!win.weekdays.includes(apiDay)) return;
+                }
+                let ok;
+                if (!cross){
+                    ok = minutes >= fromMin && minutes < toMin;
+                } else {
+                    ok = (minutes >= fromMin) || (minutes < toMin);
+                }
+                if (ok) res.push(idx);
+            });
+        } else {
+            // по умолчанию — все слоты
+            for (let i=0;i<gSlots.length;i++) res.push(i);
+        }
+        return res;
+    }
+
+    function rangesFromSlots(idxList){
+        const sorted = Array.from(new Set(idxList)).sort((a,b)=>a-b);
+        const res = [];
+        let start = null, prev = null;
+        for (const idx of sorted){
+            if (start === null){
+                start = prev = idx;
+                continue;
+            }
+            if (idx === prev + 1){
+                prev = idx;
+                continue;
+            }
+            res.push({start, end:prev});
+            start = prev = idx;
+        }
+        if (start !== null) res.push({start, end:prev});
+        return res;
+    }
+
+    function highlightRule(rule){
+        if (!chart || !gPriceData.length){
+            return;
+        }
+        const hi = new Array(gPriceData.length).fill(null);
+        const hl = { active:false, ranges:[] };
+
+        if (rule){
+            const slotIdxs = slotsForRule(rule);
+            if (slotIdxs.length){
+                // рисуем зелёной линией по окну правила
+                for (const si of slotIdxs){
+                    if (si >= 0 && si < gPriceData.length) {
+                        hi[si] = gPriceData[si];
+                    }
+                }
+
+                // окно для плагина: от первого до последнего слота этого правила
+                const ranges = rangesFromSlots(slotIdxs);
+                if (ranges.length){
+                    hl.active = true;
+                    hl.ranges = ranges;
+                }
+            }
+        }
+
+        // dataset[0] — наш подсвечивающий слой
+        chart.data.datasets[0].data = hi;
+        chart._ruleHighlight = hl;
+        chart.update('none');
+    }
+
+
+    function spanKV(k,v){
+        const s = document.createElement('span');
+        s.textContent = `${k}: ${v}`;
+        return s;
+    }
+    function refreshRulesEditorFromCfg(){
+        const editor = $('rulesEditor');
+        if (editor && editor.style.display !== 'none' && currentRelayCfg){
+            editor.value = JSON.stringify(currentRelayCfg, null, 2);
+        }
+    }
+    function parseHHMM(str){
+        const m = /^(\d{1,2}):(\d{2})$/.exec(str || '');
+        if (!m) return null;
+        const h = Number(m[1]); const min = Number(m[2]);
+        if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
+        return (h*60 + min) % (24*60);
+    }
+    function fmtHHMM(totalMin){
+        if (!Number.isFinite(totalMin)) return '';
+        const t = ((totalMin % (24*60)) + (24*60)) % (24*60);
+        const h = Math.floor(t/60), m = t%60;
+        const pad = n => (n<10 ? '0'+n : String(n));
+        return `${pad(h)}:${pad(m)}`;
+    }
+    function windowTo(win){
+        if (!win) return '';
+        if (win.to) return win.to;
+        const len = Number(win.len_minutes ?? win.lenMinutes ?? win.len);
+        const fromMin = parseHHMM(win.from);
+        if (Number.isFinite(len) && len > 0 && Number.isFinite(fromMin)){
+            return fmtHHMM(fromMin + len);
+        }
+        return '';
+    }
+    function windowToMinutes(win){
+        if (!win) return 24*60;
+        if (win.to) return parseHM(win.to);
+        const len = Number(win.len_minutes ?? win.lenMinutes ?? win.len);
+        const fromMin = parseHM(win.from ?? '00:00');
+        if (Number.isFinite(len) && Number.isFinite(fromMin)){
+            const t = (fromMin + len) % (24*60);
+            return t < 0 ? t + 24*60 : t;
+        }
+        return 24*60;
+    }
+    function windowLabel(win){
+        const kind = win?.kind || 'daily';
+        const from = win?.from || '--:--';
+        const to = windowTo(win) || '--:--';
+        // если from==to и len_minutes отсутствует — значит нет окна
+        const same = (from === to) && !win?.len_minutes && !win?.len && !win?.lenMinutes;
+        return same ? `${kind} (no window)` : `${kind} ${from}–${to}`;
+    }
+
+    function renderRules(rules, relayCfg){
+        const box = $('rulesBox');
+        box.classList.remove('muted');
+        box.innerHTML = '';
+
+        // штамп конфигурации
+        const stamp = relayCfg?._snapshot || relayCfg?.meta || {};
+        lastConfigCreated = stamp.millis ?? stamp.created_ms ?? stamp.created ?? lastConfigCreated;
+        lastDeviceEdit = relayCfg?.meta?.local_edit_ms ?? lastDeviceEdit;
+        lastConfigSeen = Date.now();
+        updateConfigStamp();
+
+        const mode = relayCfg?.mode || '—';
+        const stepSec = relayCfg?.stepSec;
+
+        if (!rules || !rules.length){
+            box.textContent = `Режим: ${mode}. Правила не заданы.`;
+            return;
+        }
+
+        const headerInfo = document.createElement('div');
+        headerInfo.className = 'muted';
+        headerInfo.style.marginBottom = '6px';
+        headerInfo.textContent = `Режим: ${mode}, stepSec=${stepSec ?? '—'} сек, правил: ${rules.length}`;
+        box.appendChild(headerInfo);
+
+        const makeField = (labelText, inputEl) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'rule-field';
+            const lab = document.createElement('label');
+            lab.textContent = labelText;
+            wrap.appendChild(lab);
+            wrap.appendChild(inputEl);
+            return wrap;
+        };
+        const minutesVal = r => (typeof r.min_minutes === 'number') ? r.min_minutes
+            : (typeof r.target_on_minutes === 'number' ? r.target_on_minutes : '');
+        const updateMinutes = (rule, raw) => {
+            const v = raw.trim();
+            if (v === '') {
+                delete rule.min_minutes;
+                delete rule.target_on_minutes;
+                return;
+            }
+            const n = Number(v);
+            if (Number.isFinite(n)) {
+                rule.min_minutes = n;
+                rule.target_on_minutes = n; // для совместимости со старым именем
+            }
+        };
+
+        rules.forEach((r, idx) => {
+            const div = document.createElement('div');
+            div.className = 'rule';
+
+            const win = r.window || {};
+
+            const header = document.createElement('div');
+            header.className = 'rule-header';
+
+            const title = document.createElement('div');
+            title.className = 'rule-title';
+            title.textContent = r.id || '(без id)';
+
+            const tags = document.createElement('div');
+            tags.className = 'rule-tags';
+
+            // тип: quota/force_on — определяем по наличию target_on_minutes/force_on
+            let typeLabel = 'rule';
+            if (r.force_on === true) {
+                typeLabel = 'force_on';
+            } else if (typeof minutesVal(r) === 'number' && minutesVal(r) > 0) {
+                typeLabel = 'quota';
+            } else if (r.level_max !== undefined || r.level_min !== undefined) {
+                typeLabel = 'threshold';
+            }
+
+            const tType = document.createElement('span');
+            tType.className = 'rule-tag';
+            tType.textContent = typeLabel;
+            tags.appendChild(tType);
+
+            if (win.kind){
+                const tWin = document.createElement('span');
+                tWin.className = 'rule-tag';
+                tWin.textContent = windowLabel(win);
+                tags.appendChild(tWin);
+            }
+
+            if (r.enabled === false) {
+                const tE = document.createElement('span');
+                tE.className = 'rule-tag';
+                tE.textContent = 'disabled';
+                tags.appendChild(tE);
+            }
+
+            header.appendChild(title);
+            header.appendChild(tags);
+            div.appendChild(header);
+
+            const body = document.createElement('div');
+            body.className = 'rule-body';
+
+            // Включено
+            const enInput = document.createElement('input');
+            enInput.type = 'checkbox';
+            enInput.checked = (r.enabled !== false);
+            enInput.addEventListener('change', () => {
+                const rule = currentRelayCfg.rules[idx];
+                rule.enabled = enInput.checked;
+                enterEditMode();
+                touchLocalEdit();
+                refreshRulesEditorFromCfg();
+            });
+            body.appendChild(makeField('Включено', enInput));
+
+            // ID
+            const idInput = document.createElement('input');
+            idInput.type = 'text';
+            idInput.value = r.id || '';
+            idInput.addEventListener('input', () => {
+                const rule = currentRelayCfg.rules[idx];
+                rule.id = idInput.value.trim() || undefined;
+                title.textContent = rule.id || '(без id)';
+                enterEditMode();
+                touchLocalEdit();
+                refreshRulesEditorFromCfg();
+            });
+            body.appendChild(makeField('ID правила', idInput));
+
+            // Минут в окне (если оставить пустым — по сути force_on)
+            const tonInput = document.createElement('input');
+            tonInput.type = 'number';
+            tonInput.value = minutesVal(r);
+            tonInput.addEventListener('input', () => {
+                const rule = currentRelayCfg.rules[idx];
+                updateMinutes(rule, tonInput.value);
+                enterEditMode();
+                touchLocalEdit();
+                refreshRulesEditorFromCfg();
+            });
+            body.appendChild(makeField('Минут в окне', tonInput));
+
+            // Порог цены (min/max)
+            const lvlMin = document.createElement('input');
+            lvlMin.type = 'number';
+            lvlMin.step = 'any';
+            lvlMin.value = (r.level_min ?? '');
+            lvlMin.addEventListener('input', () => {
+                const rule = currentRelayCfg.rules[idx];
+                const v = lvlMin.value.trim();
+                rule.level_min = v === '' ? undefined : Number(v);
+                enterEditMode();
+                touchLocalEdit();
+                refreshRulesEditorFromCfg();
+            });
+            body.appendChild(makeField('Мин. цена', lvlMin));
+
+            const lvlMax = document.createElement('input');
+            lvlMax.type = 'number';
+            lvlMax.step = 'any';
+            lvlMax.value = (r.level_max ?? '');
+            lvlMax.addEventListener('input', () => {
+                const rule = currentRelayCfg.rules[idx];
+                const v = lvlMax.value.trim();
+                rule.level_max = v === '' ? undefined : Number(v);
+                enterEditMode();
+                touchLocalEdit();
+                refreshRulesEditorFromCfg();
+            });
+            body.appendChild(makeField('Макс. цена', lvlMax));
+
+            // Окно (kind / from / to)
+            const winKindSel = document.createElement('select');
+            ['daily','weekly'].forEach(opt => {
+                const o = document.createElement('option');
+                o.value = opt;
+                o.textContent = opt;
+                winKindSel.appendChild(o);
+            });
+            winKindSel.value = win.kind || 'daily';
+            const recomputeTo = (rule, toInputEl) => {
+                const fMin = parseHM(rule.window?.from || '00:00');
+                const len = Number(rule.window?.len_minutes);
+                if (Number.isFinite(fMin) && Number.isFinite(len) && len > 0){
+                    const toMin = (fMin + len + 24*60) % (24*60);
+                    const h = Math.floor(toMin/60), m = toMin % 60;
+                    const pad = n => n<10 ? '0'+n : String(n);
+                    const toStr = `${pad(h)}:${pad(m)}`;
+                    rule.window.to = toStr;
+                    if (toInputEl) toInputEl.value = toStr;
+                    return;
+                }
+            };
+            const recomputeLen = (rule, fromStr, toStr, lenInputEl) => {
+                const fMin = parseHM(fromStr || '00:00');
+                const tMin = parseHM(toStr || '00:00');
+                if (Number.isFinite(fMin) && Number.isFinite(tMin)){
+                    const diff = ((tMin - fMin) % (24*60) + 24*60) % (24*60);
+                    rule.window.len_minutes = diff;
+                    if (lenInputEl) lenInputEl.value = diff;
+                }
+            };
+            winKindSel.addEventListener('change', () => {
+                const rule = currentRelayCfg.rules[idx];
+                rule.window = rule.window || {};
+                rule.window.kind = winKindSel.value;
+                enterEditMode();
+                touchLocalEdit();
+                refreshRulesEditorFromCfg();
+            });
+
+            const fromInput = document.createElement('input');
+            fromInput.type = 'time';
+            fromInput.value = win.from || '';
+            fromInput.addEventListener('change', () => {
+                const rule = currentRelayCfg.rules[idx];
+                rule.window = rule.window || {};
+                rule.window.from = fromInput.value || undefined;
+                recomputeTo(rule, toInput);
+                enterEditMode();
+                touchLocalEdit();
+                refreshRulesEditorFromCfg();
+            });
+
+            const toInput = document.createElement('input');
+            toInput.type = 'time';
+            toInput.value = win.to || windowTo(win) || '';
+            toInput.addEventListener('change', () => {
+                const rule = currentRelayCfg.rules[idx];
+                rule.window = rule.window || {};
+                rule.window.to = toInput.value || undefined;
+                // если есть начало — пересчитываем длину
+                recomputeLen(rule, rule.window.from, rule.window.to, lenInput);
+                enterEditMode();
+                touchLocalEdit();
+                refreshRulesEditorFromCfg();
+            });
+
+            const winWrap = document.createElement('div');
+            winWrap.className = 'rule-field';
+            const winLab = document.createElement('label');
+            winLab.textContent = 'Окно (kind / с / по)';
+            winWrap.appendChild(winLab);
+
+            const winRow = document.createElement('div');
+            winRow.style.display = 'flex';
+            winRow.style.gap = '4px';
+            winRow.appendChild(winKindSel);
+            winRow.appendChild(fromInput);
+            winRow.appendChild(toInput);
+
+            winWrap.appendChild(winRow);
+            body.appendChild(winWrap);
+
+            // Длина окна (len_minutes) — опционально
+            const lenInput = document.createElement('input');
+            lenInput.type = 'number';
+            lenInput.value = win.len_minutes ?? '';
+            lenInput.addEventListener('input', () => {
+                const rule = currentRelayCfg.rules[idx];
+                rule.window = rule.window || {};
+                const v = lenInput.value.trim();
+                rule.window.len_minutes = v === '' ? undefined : Number(v);
+                if (v !== '') {
+                    recomputeTo(rule, toInput);
+                }
+                enterEditMode();
+                touchLocalEdit();
+                refreshRulesEditorFromCfg();
+            });
+            body.appendChild(makeField('Длина окна, мин', lenInput));
+
+            div.appendChild(body);
+
+            // подсветка диапазона на графике
+            div.addEventListener('mouseenter', ()=>{
+                const rule = (currentRelayCfg && currentRelayCfg.rules && currentRelayCfg.rules[idx]) || r;
+                highlightRule(rule);
+            });
+            div.addEventListener('mouseleave', ()=>highlightRule(null));
+
+            box.appendChild(div);
+        });
+    }
+
+
+    /*** --- обработка event:"push" --- ***/
+    function handlePushEvent(o){
+        const p = o.payload || {};
+        const ucfg = p.user_cfg || {};
+        const priceStore = ucfg.price_store || {};
+        const pricesRoot = priceStore.prices || priceStore;
+
+        // мета-инфо
+        const host = p.cfg?.net?.hostname || 'esp';
+        const m = ucfg._snapshot?.millis || p._snapshot?.millis;
+        $('snapMeta').textContent = `host=${host}`;
+        $('snapInfo').textContent = m ? `ESP snapshot millis=${m.toFixed ? m.toFixed(1) : m}` : '—';
+
+        // ссылка "Скачать snapshot.json" (полный user_cfg)
+        const fullText = JSON.stringify(ucfg, null, 2);
+        const blob = new Blob([fullText], {type:'application/json'});
+        const url  = URL.createObjectURL(blob);
+        const a = $('dl');
+        a.href = url;
+        a.style.display = 'inline-block';
+
+        // график
+        renderChart(pricesRoot);
+
+        // таблица слотов (данные есть всегда, отображение по кнопке)
+        const slots = pricesRoot?.slots || [];
+        const stepSec = pricesRoot?.stepSec || 900;
+        renderSlotsTable(slots, stepSec);
+
+        // правила
+        const relayCfg = ucfg.relay_store?.relay;
+        const rules = relayCfg?.rules || [];
+        renderRules(rules, relayCfg);
+
+        if (lastSendTs && lastConfigCreated && lastConfigCreated >= lastSendTs){
+            setMsg('Снимок от контроллера получен после отправки — конфигурация принята');
+        }
+
+        // обновим currentRelayCfg для редактора
+        if (relayCfg) {
+            currentRelayCfg = JSON.parse(JSON.stringify(relayCfg));
+        } else {
+            // если конфиг не пришёл – создаём пустой шаблон
+            currentRelayCfg = {
+                mode: 'rules',
+                stepSec: 900,
+                rules: []
+            };
+        }
+
+        const editor = $('rulesEditor');
+        if (editor.style.display !== 'none') {
+            editor.value = JSON.stringify(currentRelayCfg, null, 2);
+        }
+    }
+
+    /*** --- новый протокол snapshot: status + getSnapshot --- ***/
+    let snapshotInProgress = false;
+    let snapshotTimer = null;
+
+    function stopSnapshotLoop(){
+        if (snapshotTimer){
+            clearTimeout(snapshotTimer);
+            snapshotTimer = null;
+        }
+    }
+
+    function resetSnapshotUI(){
+        $('dl').style.display = 'none';
+        $('dl').href = '#';
+        $('snapMeta').textContent = '—';
+        $('snapInfo').textContent = '—';
+    }
+
+    // Универсальный рендер снапшота: поддерживаем разные формы корня
+    function renderSnapshotRoot(root){
+        try{
+            // 🔍 Отладка структуры снапшота
+            try {
+                const rootKeys = root && typeof root === 'object'
+                    ? Object.keys(root) : [];
+                log('[snapshot] root keys: ' + rootKeys.join(', '));
+
+                if (root && root.user_cfg && typeof root.user_cfg === 'object') {
+                    log('[snapshot] user_cfg keys: ' +
+                        Object.keys(root.user_cfg).join(', '));
+                }
+                if (root && root.price_store) {
+                    log('[snapshot] price_store detected on root');
+                }
+            } catch(e) {
+                log('[snapshot debug error] ' + e.message);
+            }
+
+            // Вариант 1: уже готов payload (есть user_cfg / cfg / _snapshot)
+            if (root && (root.user_cfg || root.cfg)){
+                handlePushEvent({event:'push', payload: root});
+                return;
+            }
+
+            // Вариант 2: корень — это user_cfg (есть price_store, relay_store и т.п.)
+            if (root && (root.price_store || root.relay_store || root.adc || root.net)){
+                handlePushEvent({event:'push', payload:{user_cfg: root}});
+                return;
+            }
+
+            // Вариант 3: старый формат: price_store на корне
+            if (root && root.price_store){
+                const priceStore = root.price_store || {};
+                const pricesRoot = priceStore.prices || priceStore;
+                renderChart(pricesRoot);
+                renderSlotsTable(pricesRoot.slots || [], pricesRoot.stepSec || 900);
+                return;
+            }
+
+            // Fallback: пытаемся трактовать как user_cfg
+            handlePushEvent({event:'push', payload:{user_cfg: root}});
+        } catch(e){
+            setMsg('decode error');
+            log('[snapshot render error] ' + String(e));
+        }
+    }
+
+
+    async function snapshotLoopStep(){
+        try{
+            setMsg('Запрос snapshot (mode=getSnapshot)…');
+            const js = await api('GET',{mode:'getSnapshot'});
+
+            // Пока снимка нет — сервер вернёт {ok:false,error:"no_snapshot"}
+            if (js && js.ok === false && js.error === 'no_snapshot'){
+                log('[getSnapshot] no_snapshot; ждём контроллер…');
+                setMsg('Ждём снимок от контроллера…');
+                // ждём 2 секунды и снова пробуем получить снимок
+                scheduleSnapshot(2000);
+                return;
+            }
+
+            // Здесь js — уже сам snapshot (любой из поддерживаемых форм)
+            log('[getSnapshot] snapshot получен');
+
+            // рендерим новый снапшот
+            renderSnapshotRoot(js);
+            setMsg('Снимок загружен (автообновление)');
+
+            // 🔁 через 10 секунд проверяем, не появился ли новый снапшот
+            scheduleSnapshot(10000);
+        } catch(e){
+            log('[getSnapshot err] ' + e.message);
+            setMsg('getSnapshot error: ' + e.message);
+            // подождём и попробуем ещё раз
+            scheduleSnapshot(3000);
+        }
+    }
+
+
+    async function requestSnapshot(){
+        if (snapshotInProgress){
+            log('[snapshot] уже в процессе');
+            return;
+        }
+        snapshotInProgress = true;
+        resetSnapshotUI();
+        stopSnapshotLoop();
+
+        try{
+            await snapshotLoopStep();
+        } finally {
+            snapshotInProgress = false;
+        }
+    }
+
+    /*** --- boot & кнопки --- ***/
+    async function boot(){
+        await loadDefaults();
+
+        const u = new URL(location.href);
+        $('base').value  = u.searchParams.get('base')  || defaults.base  || '';
+        $('token').value = u.searchParams.get('token') || defaults.token || '';
+
+        // покажем версию UI
+        const uiVer = $('uiVersion');
+        if (uiVer) uiVer.textContent = `UI ${APP_VERSION}`;
+
+        resetSnapshotUI();
+        setMsg('Готов к запросу snapshot…');
+
+        try{
+            await requestSnapshot();
+        } catch(e){
+            setMsg('init error: ' + e.message);
+            log('[err] ' + e.message);
+        }
+
+        $('btnFetch').onclick = async ()=>{
+            try{
+                setMsg('Запрос снапшота…');
+                await requestSnapshot();
+            }catch(e){
+                setMsg('error: ' + e.message);
+                log('[err] ' + e.message);
+            }
+        };
+
+        $('btnSlotsToggle').onclick = ()=>{
+            const cont = $('slotsContainer');
+            const btn  = $('btnSlotsToggle');
+            const vis = cont.style.display !== 'none';
+            cont.style.display = vis ? 'none' : 'block';
+            btn.textContent = vis ? 'Показать таблицу' : 'Скрыть таблицу';
+        };
+
+        // сохранение системного конфига (base/token)
+        const btnSaveSys = $('btnSaveSystem');
+        const btnEditSys = $('btnEditSystem');
+        const btnCancelSys = $('btnCancelSystem');
+        const sysEditor = $('sysConfigEditor');
+        const btnLoadDeviceCfg = $('btnLoadDeviceCfg');
+        const btnSaveDeviceCfg = $('btnSaveDeviceCfg');
+        const deviceCfgEditor = $('deviceCfgEditor');
+
+        async function loadSystemConfigToEditor(){
+            try{
+                const resp = await fetch('/api/system_config', {cache:'no-store'});
+                if (!resp.ok) throw new Error('system_config load failed');
+                const js = await resp.json();
+                sysEditor.value = JSON.stringify(js, null, 2);
+            } catch(e){
+                sysEditor.value = '// load error: ' + e.message;
+            }
+        }
+
+        if (btnEditSys){
+            btnEditSys.onclick = async ()=>{
+                btnEditSys.style.display = 'none';
+                btnSaveSys.style.display = 'inline-block';
+                btnCancelSys.style.display = 'inline-block';
+                sysEditor.style.display = 'block';
+                await loadSystemConfigToEditor();
+            };
+        }
+        if (btnCancelSys){
+            btnCancelSys.onclick = ()=>{
+                sysEditor.style.display = 'none';
+                btnSaveSys.style.display = 'none';
+                btnCancelSys.style.display = 'none';
+                btnEditSys.style.display = 'inline-block';
+            };
+        }
+        if (btnSaveSys){
+            btnSaveSys.onclick = async ()=>{
+                try{
+                    const parsed = JSON.parse(sysEditor.value);
+                    if (typeof parsed !== 'object') throw new Error('json root must be object');
+                    await fetch('/api/system_config', {
+                        method:'POST',
+                        headers:{'Content-Type':'application/json'},
+                        body: JSON.stringify(parsed)
+                    });
+                    setMsg('Системный конфиг сохранён');
+                    sysEditor.style.display = 'none';
+                    btnSaveSys.style.display = 'none';
+                    btnCancelSys.style.display = 'none';
+                    btnEditSys.style.display = 'inline-block';
+                    // обновим defaults
+                    defaults.base  = parsed.mock_base  || defaults.base;
+                    defaults.token = parsed.mock_token || defaults.token;
+                } catch(e){
+                    setMsg('Ошибка сохранения системного конфига: ' + e.message);
+                }
+            };
+        }
+
+        // системный конфиг устройства (через exec base)
+        if (btnLoadDeviceCfg){
+            btnLoadDeviceCfg.onclick = async ()=>{
+                try{
+                    const js = await api('GET',{mode:'getSystemConfig'});
+                    if (js && js.system_config){
+                        deviceCfgEditor.value = JSON.stringify(js.system_config, null, 2);
+                        setMsg('Системный конфиг загружен с сервера');
+                    } else {
+                        deviceCfgEditor.value = '// system_config отсутствует на сервере';
+                        setMsg('system_config отсутствует на сервере');
+                    }
+                } catch(e){
+                    setMsg('Ошибка загрузки system_config: ' + e.message);
+                }
+            };
+        }
+        if (btnSaveDeviceCfg){
+            btnSaveDeviceCfg.onclick = async ()=>{
+                try{
+                    const parsed = JSON.parse(deviceCfgEditor.value);
+                    if (typeof parsed !== 'object') throw new Error('json root must be object');
+                    await api('POST',{mode:'setSystemConfig'}, parsed);
+                    setMsg('Системный конфиг сохранён на сервере, ожидаем выборки контроллером');
+                } catch(e){
+                    setMsg('Ошибка сохранения system_config: ' + e.message);
+                }
+            };
+        }
+
+        // редактор правил
+        $('btnEditRules').onclick = () => {
+            if (!currentRelayCfg) {
+                currentRelayCfg = {
+                    mode: 'rules',
+                    stepSec: 900,
+                    rules: []
+                };
+            }
+            enterEditMode();
+        };
+
+        $('btnCancelRules').onclick = () => {
+            snapshotPausedByEditor = false;
+            snapshotAutoUpdate = true;
+            requestSnapshot(); // запустить цикл заново
+            $('rulesEditor').style.display = 'none';
+            $('btnCancelRules').style.display = 'none';
+            setMsg('Отмена изменений, автообновление возобновлено');
+        };
+
+        async function saveRulesToController(){
+            snapshotPausedByEditor = false;
+            snapshotAutoUpdate = true;
+            requestSnapshot(); // запустить цикл заново
+            try {
+                let cfg = null;
+
+                if ($('rulesEditor').style.display !== 'none') {
+                    const txt = $('rulesEditor').value;
+                    try {
+                        cfg = JSON.parse(txt);
+                    } catch (e) {
+                        setMsg('Ошибка JSON: ' + e.message);
+                        return;
+                    }
+                } else {
+                    // сохраняем то, что отредактировали в карточках
+                    cfg = currentRelayCfg ? JSON.parse(JSON.stringify(currentRelayCfg)) : null;
+                }
+
+                if (!cfg || typeof cfg !== 'object') {
+                    setMsg('Корень JSON должен быть объектом с полями mode, stepSec, rules');
+                    return;
+                }
+                if (!Array.isArray(cfg.rules)) {
+                    setMsg('Поле rules должно быть массивом');
+                    return;
+                }
+                if (!cfg.meta) cfg.meta = {};
+                if (!cfg.meta.local_edit_ms) {
+                    cfg.meta.local_edit_ms = lastLocalEdit || Date.now();
+                }
+
+                // локально обновляем виджеты, чтобы сразу видеть изменения
+                currentRelayCfg = cfg;
+                renderRules(cfg.rules || [], cfg);
+
+                // штамп отправки, чтобы понять, пришёл ли новый конфиг
+                lastSendTs = Date.now();
+                // отправляем на mock GAS: новый протокол setRules
+                await api('POST', {mode:'setRules'}, { relay: cfg });
+
+                setMsg('Правила отправлены на сервер. Ждём новый snapshot от контроллера…');
+                log('[rules] POST mode=setRules отправлен на GAS');
+                updateConfigStamp();
+
+                // 🔄 сразу запускаем обновление snapshot (будет крутиться, пока контроллер не пришлёт новый)
+                requestSnapshot();
+
+                $('rulesEditor').style.display = 'none';
+                $('btnCancelRules').style.display = 'none';
+            } catch (e) {
+                setMsg('Ошибка сохранения: ' + e.message);
+                log('[rules.err] ' + e.message);
+            }
+        }
+        $('btnSaveRules').onclick = saveRulesToController;
+
+
+        // сворачивание лога (кнопка в верхнем баре)
+        const row       = document.querySelector('.row');
+        const logCard   = $('logCard');
+        const btnLog    = $('btnToggleLog');
+        let logCollapsed = false;
+
+        btnLog.onclick = () => {
+            logCollapsed = !logCollapsed;
+            if (logCollapsed) {
+                logCard.style.display = 'none';
+                row.style.gridTemplateColumns = '1fr';
+                btnLog.textContent = 'Показать лог';
+            } else {
+                logCard.style.display = '';
+                row.style.gridTemplateColumns = '2fr 1fr';
+                btnLog.textContent = 'Свернуть лог';
+            }
+        };
+
+        // по умолчанию таблица скрыта
+        $('slotsContainer').style.display = 'none';
+    }
+
+    document.addEventListener('DOMContentLoaded', boot);
 </script>
 </body>
 </html>
