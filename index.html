@@ -1435,7 +1435,16 @@
 
         $('btnFetch').onclick = async ()=>{
             try{
-                setMsg('Запрос снапшота…');
+                // очистим предыдущий снапшот на mock GAS, чтобы дождаться нового
+                resetSnapshotUI();
+                $('log').textContent = '';
+                try{
+                    await api('POST',{mode:'clearSnapshot'});
+                    log('[btnFetch] clearSnapshot ok');
+                } catch(e){
+                    log('[btnFetch] clearSnapshot failed: ' + e.message);
+                }
+                setMsg('Ждём новый снимок от контроллера…');
                 await requestSnapshot();
             }catch(e){
                 setMsg('error: ' + e.message);
