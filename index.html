@@ -1231,8 +1231,14 @@
 
         // мета-инфо
         const host = p.cfg?.net?.hostname || 'esp';
-        const m = ucfg._snapshot?.millis || p._snapshot?.millis;
-        $('snapMeta').textContent = `host=${host}`;
+        const snapMeta = ucfg._snapshot || p._snapshot || {};
+        const m = snapMeta?.millis;
+        const staIp = snapMeta?.sta_ip || snapMeta?.ip || '';
+        const apIp  = snapMeta?.ap_ip  || '';
+        let metaStr = `host=${host}`;
+        if (staIp) metaStr += ` • STA ${staIp}`;
+        if (apIp && apIp !== staIp) metaStr += ` • AP ${apIp}`;
+        $('snapMeta').textContent = metaStr;
         $('snapInfo').textContent = m ? `ESP snapshot millis=${m.toFixed ? m.toFixed(1) : m}` : '—';
 
         // ссылка "Скачать snapshot.json" (полный user_cfg)
